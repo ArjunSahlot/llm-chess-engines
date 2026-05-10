@@ -22,7 +22,7 @@ spec = ToolSpec(
 
 def __call__(workspace: GenerationWorkspace, arguments: dict[str, Any]) -> ToolResult:
     target = str(arguments.get("target") or "").strip()
-    command = ["make"] + ([target] if target else [])
+    command = ["make", "-B"] + ([target] if target else [])
     try:
         proc = subprocess.run(
             command,

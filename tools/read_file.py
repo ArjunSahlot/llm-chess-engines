@@ -19,9 +19,9 @@ spec = ToolSpec(
 
 
 def __call__(workspace: GenerationWorkspace, arguments: dict[str, Any]) -> ToolResult:
-    path = workspace.resolve_inside(str(arguments["path"]))
     try:
+        path = workspace.resolve_inside(str(arguments["path"]))
         content = path.read_text(encoding="utf-8")
         return ToolResult("", spec.name, True, content, {"path": str(path.relative_to(workspace.path))})
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         return ToolResult("", spec.name, False, str(exc))

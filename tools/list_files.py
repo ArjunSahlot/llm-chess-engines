@@ -18,7 +18,10 @@ spec = ToolSpec(
 
 
 def __call__(workspace: GenerationWorkspace, arguments: dict[str, Any]) -> ToolResult:
-    root = workspace.resolve_inside(str(arguments.get("path") or "."))
+    try:
+        root = workspace.resolve_inside(str(arguments.get("path") or "."))
+    except ValueError as exc:
+        return ToolResult("", spec.name, False, str(exc))
     if not root.exists():
         return ToolResult("", spec.name, False, f"path does not exist: {root.relative_to(workspace.path)}")
     if not root.is_dir():

@@ -22,12 +22,12 @@ spec = ToolSpec(
 
 
 def __call__(workspace: GenerationWorkspace, arguments: dict[str, Any]) -> ToolResult:
-    path = workspace.resolve_inside(str(arguments["path"]))
-    content = str(arguments["content"])
     try:
+        path = workspace.resolve_inside(str(arguments["path"]))
+        content = str(arguments["content"])
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         rel = str(path.relative_to(workspace.path))
         return ToolResult("", spec.name, True, f"wrote {rel} ({len(content)} bytes)", {"path": rel, "bytes": len(content)})
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         return ToolResult("", spec.name, False, str(exc))
