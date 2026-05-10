@@ -4,13 +4,12 @@ from typing import Any
 
 from harness.types import ToolCall, ToolResult, ToolSpec
 from harness.workspace import GenerationWorkspace
-from tools import compile_engine, list_files, read_file, write_file
+from tools import compile_engine, read_file, write_file
 
 
 TOOLS = {
     read_file.spec.name: read_file,
     write_file.spec.name: write_file,
-    list_files.spec.name: list_files,
     compile_engine.spec.name: compile_engine,
 }
 

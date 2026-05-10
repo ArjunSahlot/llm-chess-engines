@@ -58,7 +58,8 @@ class RunConfig:
     base_url: str | None = None
     temperature: float = 0.2
     max_turns: int = 16
-    max_output_tokens: int = 65536
+    max_output_tokens: int = 64000
+    stream: bool = True
     timeout_seconds: int = 60
     root: Path = Path("generations")
 

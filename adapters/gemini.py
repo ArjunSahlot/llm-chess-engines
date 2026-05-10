@@ -51,29 +51,49 @@ class GeminiAdapter:
 
         system = "\n".join(message.content for message in messages if message.role == "system") or None
         client = genai.Client(api_key=os.environ[config.api_key_env])
-        response = client.models.generate_content(
-            model=config.model,
-            contents=_contents(messages),
-            config=types.GenerateContentConfig(
+        request = {
+            "model": config.model,
+            "contents": _contents(messages),
+            "config": types.GenerateContentConfig(
                 system_instruction=system,
                 temperature=config.temperature,
+                max_output_tokens=config.max_output_tokens,
                 tools=[types.Tool(function_declarations=[_function_declaration(spec) for spec in tools])],
             ),
+        }
+        if config.stream:
+            text_parts: list[str] = []
+            calls: list[ToolCall] = []
+            usage: dict[str, Any] = {}
+            for chunk in client.models.generate_content_stream(**request):
+                chunk_text, chunk_calls, chunk_usage = _parse_response(chunk)
+                text_parts.append(chunk_text)
+                calls.extend(chunk_calls)
+                usage.update(chunk_usage)
+            return AdapterResponse(text="".join(text_parts), tool_calls=calls, usage=usage, raw={})
+
+        response = client.models.generate_content(
+            **request,
         )
-        text_parts: list[str] = []
-        calls: list[ToolCall] = []
-        for candidate in response.candidates or []:
-            for part in candidate.content.parts or []:
-                if getattr(part, "text", None):
-                    text_parts.append(part.text)
-                function_call = getattr(part, "function_call", None)
-                if function_call:
-                    calls.append(
-                        ToolCall(
-                            id=getattr(function_call, "id", "") or function_call.name,
-                            name=function_call.name,
-                            arguments=dict(function_call.args or {}),
-                        )
+        text, calls, usage = _parse_response(response)
+        return AdapterResponse(text=text, tool_calls=calls, usage=usage, raw={})
+
+
+def _parse_response(response: Any) -> tuple[str, list[ToolCall], dict[str, Any]]:
+    text_parts: list[str] = []
+    calls: list[ToolCall] = []
+    for candidate in response.candidates or []:
+        for part in candidate.content.parts or []:
+            if getattr(part, "text", None):
+                text_parts.append(part.text)
+            function_call = getattr(part, "function_call", None)
+            if function_call:
+                calls.append(
+                    ToolCall(
+                        id=getattr(function_call, "id", "") or function_call.name,
+                        name=function_call.name,
+                        arguments=dict(function_call.args or {}),
                     )
-        usage = response.usage_metadata.model_dump() if getattr(response, "usage_metadata", None) else {}
-        return AdapterResponse(text="\n".join(text_parts), tool_calls=calls, usage=usage, raw={})
+                )
+    usage = response.usage_metadata.model_dump() if getattr(response, "usage_metadata", None) else {}
+    return "\n".join(text_parts), calls, usage

@@ -21,7 +21,8 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--base-url", help="Optional OpenAI-compatible base URL.")
     generate.add_argument("--temperature", type=float, default=0.2)
     generate.add_argument("--max-turns", type=int, default=20)
-    generate.add_argument("--max-output-tokens", type=int, default=65536)
+    generate.add_argument("--max-output-tokens", type=int, default=64000)
+    generate.add_argument("--no-stream", action="store_true", help="Disable provider streaming when supported.")
     generate.add_argument("--timeout-seconds", type=int, default=60)
     generate.add_argument("--root", type=Path, default=Path("generations"))
     return parser
@@ -38,6 +39,7 @@ def run_generate(args: argparse.Namespace) -> int:
         temperature=args.temperature,
         max_turns=args.max_turns,
         max_output_tokens=args.max_output_tokens,
+        stream=not args.no_stream,
         timeout_seconds=args.timeout_seconds,
         root=args.root,
     )

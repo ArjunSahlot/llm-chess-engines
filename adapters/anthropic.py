@@ -40,25 +40,34 @@ class AnthropicAdapter:
 
         system, api_messages = _messages(messages)
         client = Anthropic(api_key=os.environ[config.api_key_env])
-        response = client.messages.create(
-            model=config.model,
-            max_tokens=config.max_output_tokens,
-            system=system,
-            messages=api_messages,
-            tools=[_tool_schema(spec) for spec in tools],
-            temperature=config.temperature,
-        )
-        text_parts: list[str] = []
-        calls: list[ToolCall] = []
-        for block in response.content:
-            if block.type == "text":
-                text_parts.append(block.text)
-            elif block.type == "tool_use":
-                calls.append(ToolCall(id=block.id, name=block.name, arguments=dict(block.input)))
-        usage = response.usage.model_dump() if getattr(response, "usage", None) else {}
-        return AdapterResponse(
-            text="\n".join(text_parts),
-            tool_calls=calls,
-            usage=usage,
-            raw={"id": response.id, "stop_reason": getattr(response, "stop_reason", None)},
-        )
+        params = {
+            "model": config.model,
+            "max_tokens": config.max_output_tokens,
+            "system": system,
+            "messages": api_messages,
+            "tools": [_tool_schema(spec) for spec in tools],
+            "temperature": config.temperature,
+        }
+        if config.stream:
+            with client.messages.stream(**params) as stream:
+                response = stream.get_final_message()
+            return _response_to_adapter(response)
+
+        return _response_to_adapter(client.messages.create(**params))
+
+
+def _response_to_adapter(response: Any) -> AdapterResponse:
+    text_parts: list[str] = []
+    calls: list[ToolCall] = []
+    for block in response.content:
+        if block.type == "text":
+            text_parts.append(block.text)
+        elif block.type == "tool_use":
+            calls.append(ToolCall(id=block.id, name=block.name, arguments=dict(block.input)))
+    usage = response.usage.model_dump() if getattr(response, "usage", None) else {}
+    return AdapterResponse(
+        text="\n".join(text_parts),
+        tool_calls=calls,
+        usage=usage,
+        raw={"id": response.id, "stop_reason": getattr(response, "stop_reason", None)},
+    )

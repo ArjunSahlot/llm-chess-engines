@@ -38,6 +38,9 @@ class OpenAIResponsesAdapter:
         from openai import OpenAI
 
         client = OpenAI(api_key=os.environ[config.api_key_env], base_url=config.base_url)
+        if config.stream:
+            return self._complete_streaming(client, messages, tools, config)
+
         response = client.responses.create(
             model=config.model,
             input=_input(messages),
@@ -53,3 +56,34 @@ class OpenAIResponsesAdapter:
                 calls.append(ToolCall(id=getattr(item, "call_id", getattr(item, "id", "")), name=item.name, arguments=args))
         usage = response.usage.model_dump() if getattr(response, "usage", None) else {}
         return AdapterResponse(text=text, tool_calls=calls, usage=usage, raw={"id": response.id})
+
+    def _complete_streaming(self, client: Any, messages: list[Message], tools: list[ToolSpec], config: RunConfig) -> AdapterResponse:
+        text_parts: list[str] = []
+        calls: list[ToolCall] = []
+        usage: dict[str, Any] = {}
+        response_id: str | None = None
+
+        stream = client.responses.create(
+            model=config.model,
+            input=_input(messages),
+            tools=[_tool_schema(spec) for spec in tools],
+            temperature=config.temperature,
+            max_output_tokens=config.max_output_tokens,
+            stream=True,
+        )
+        for event in stream:
+            event_type = getattr(event, "type", "")
+            if event_type == "response.output_text.delta":
+                text_parts.append(getattr(event, "delta", "") or "")
+            elif event_type == "response.output_item.done":
+                item = getattr(event, "item", None)
+                if getattr(item, "type", None) == "function_call":
+                    args = json.loads(getattr(item, "arguments", "") or "{}")
+                    calls.append(ToolCall(id=getattr(item, "call_id", getattr(item, "id", "")), name=item.name, arguments=args))
+            elif event_type == "response.completed":
+                response = getattr(event, "response", None)
+                response_id = getattr(response, "id", None)
+                if getattr(response, "usage", None):
+                    usage = response.usage.model_dump()
+
+        return AdapterResponse(text="".join(text_parts), tool_calls=calls, usage=usage, raw={"id": response_id})

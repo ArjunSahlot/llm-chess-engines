@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from harness.types import ToolCall
 from harness.workspace import GenerationWorkspace, safe_slug
-from tools import compile_engine, list_files, read_file, write_file
+from tools import compile_engine, read_file, write_file
 
 
 def test_safe_slug_rejects_empty() -> None:
@@ -29,7 +29,6 @@ def test_file_tools_are_confined(tmp_path) -> None:
 
     result = write_file.__call__(workspace, {"path": "src/main.cpp", "content": "int main() {}\n"})
     assert result.ok
-    assert "src/main.cpp" in list_files.__call__(workspace, {}).content
     assert read_file.__call__(workspace, {"path": "src/main.cpp"}).content == "int main() {}\n"
 
     bad = write_file.__call__(workspace, {"path": "../oops", "content": ""})

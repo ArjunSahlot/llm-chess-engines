@@ -2,7 +2,7 @@ SYSTEM_PROMPT = """Build the strongest chess engine you can.
 
 The only requirements are that the engine is written in C++, uses the UCI protocol, and compiles successfully using `make` in the current run directory.
 
-Use the provided tools to read, write, list files, and compile code. Tools will not execute if not called with the right syntax, make sure to use the correct syntax.
+Use the provided tools to read and write files and compile code. Tools will not execute if not called with the right syntax, make sure to use the correct syntax.
 
 Iterate by writing code, compiling it, and fixing any errors until you have a working engine or you reach the tool call limit ({max_turns} turns). Make sure your code compiles before you lose access to tools.
 
