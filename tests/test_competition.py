@@ -11,6 +11,7 @@ from competition.runner import CompetitionRunner
 
 
 ENGINE_SCRIPT = """#!{python}
+import chess
 import sys
 
 MOVES = {moves!r}
@@ -21,6 +22,8 @@ for raw in sys.stdin:
     if line.startswith("position startpos"):
         parts = line.split()
         ply = max(0, len(parts) - parts.index("moves") - 1) if "moves" in parts else 0
+    elif line.startswith("position fen "):
+        ply = chess.Board(line.removeprefix("position fen ")).ply()
     if line == "uci":
         print("id name fake", flush=True)
         print("uciok", flush=True)
@@ -73,6 +76,7 @@ def test_competition_runner_persists_game_data(tmp_path) -> None:
         assert db.execute("SELECT COUNT(*) FROM games WHERE status='finished'").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM moves").fetchone()[0] == 4
         assert db.execute("SELECT COUNT(*) FROM uci_events").fetchone()[0] > 8
+        assert db.execute("SELECT COUNT(*) FROM uci_events WHERE direction='in' AND line LIKE 'position fen %'").fetchone()[0] == 4
         pgn = db.execute("SELECT pgn FROM games").fetchone()[0]
         assert "1. e4 e5 2. Nf3 Nc6" in pgn
         assert db.execute("SELECT COUNT(*) FROM standings").fetchone()[0] == 2
@@ -105,5 +109,7 @@ def test_competition_cycles_time_controls_and_persists_opening(tmp_path) -> None
         assert rows[0][1] == "e2e4 e7e5"
         assert rows[0][2]
         assert "Opening" in rows[0][3]
+        assert "FEN" in rows[0][3]
+        assert "2. Nf3" in rows[0][3]
     finally:
         db.close()

@@ -31,10 +31,9 @@ class GameRunner:
         pgn_game.headers["Black"] = black.name
         pgn_game.headers["TimeControl"] = time_control.label()
         if opening is not None:
+            pgn_game.setup(board)
             pgn_game.headers["Opening"] = opening.label
             pgn_game.headers["OpeningSource"] = opening.source
-            pgn_game.headers["FEN"] = board.fen()
-            pgn_game.headers["SetUp"] = "1"
         node = pgn_game
         clocks = {chess.WHITE: time_control.init_ms, chess.BLACK: time_control.init_ms}
 
@@ -58,7 +57,7 @@ class GameRunner:
                 current = engines[side]
                 current_engine = white if side == chess.WHITE else black
                 fen_before = board.fen()
-                current.send(f"position startpos moves {' '.join(move.uci() for move in board.move_stack)}")
+                current.send(f"position fen {fen_before}")
                 current.send(time_control.go_command(clocks[chess.WHITE], clocks[chess.BLACK]))
                 bestmove, elapsed_ms = current.wait_bestmove(self.config.move_timeout_seconds)
 
