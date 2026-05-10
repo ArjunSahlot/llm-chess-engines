@@ -17,10 +17,19 @@ def _messages(messages: list[Message]) -> list[dict[str, Any]]:
         if message.role == "tool":
             out.append({"role": "tool", "tool_call_id": message.tool_call_id, "content": message.content})
         elif message.role == "assistant" and message.tool_calls:
+            reasoning_content = next(
+                (
+                    call.metadata["reasoning_content"]
+                    for call in message.tool_calls
+                    if call.metadata.get("reasoning_content")
+                ),
+                None,
+            )
             out.append(
                 {
                     "role": "assistant",
                     "content": message.content or None,
+                    **({"reasoning_content": reasoning_content} if reasoning_content else {}),
                     "tool_calls": [
                         {
                             "id": call.id,
@@ -49,19 +58,21 @@ class OpenAICompatibleAdapter:
             messages=_messages(messages),
             tools=[_tool_schema(spec) for spec in tools],
             tool_choice="auto",
-            temperature=config.temperature,
             max_tokens=config.max_output_tokens,
         )
         choice = response.choices[0].message
         calls = []
+        reasoning_content = getattr(choice, "reasoning_content", None)
         for call in choice.tool_calls or []:
             args = json.loads(call.function.arguments or "{}")
-            calls.append(ToolCall(id=call.id, name=call.function.name, arguments=args))
+            metadata = {"reasoning_content": reasoning_content} if reasoning_content else {}
+            calls.append(ToolCall(id=call.id, name=call.function.name, arguments=args, metadata=metadata))
         usage = response.usage.model_dump() if getattr(response, "usage", None) else {}
         return AdapterResponse(text=choice.content or "", tool_calls=calls, usage=usage, raw={"id": response.id})
 
     def _complete_streaming(self, client: Any, messages: list[Message], tools: list[ToolSpec], config: RunConfig) -> AdapterResponse:
         text_parts: list[str] = []
+        reasoning_parts: list[str] = []
         tool_parts: dict[int, dict[str, str]] = {}
         usage: dict[str, Any] = {}
         response_id: str | None = None
@@ -70,7 +81,6 @@ class OpenAICompatibleAdapter:
             messages=_messages(messages),
             tools=[_tool_schema(spec) for spec in tools],
             tool_choice="auto",
-            temperature=config.temperature,
             max_tokens=config.max_output_tokens,
             stream=True,
             stream_options={"include_usage": True},
@@ -83,6 +93,8 @@ class OpenAICompatibleAdapter:
                 delta = getattr(choice, "delta", None)
                 if getattr(delta, "content", None):
                     text_parts.append(delta.content)
+                if getattr(delta, "reasoning_content", None):
+                    reasoning_parts.append(delta.reasoning_content)
                 for call in getattr(delta, "tool_calls", []) or []:
                     index = getattr(call, "index", 0)
                     part = tool_parts.setdefault(index, {"id": "", "name": "", "arguments": ""})
@@ -94,9 +106,11 @@ class OpenAICompatibleAdapter:
                     if getattr(function, "arguments", None):
                         part["arguments"] += function.arguments
 
-        calls = [
-            ToolCall(id=part["id"], name=part["name"], arguments=json.loads(part["arguments"] or "{}"))
-            for _, part in sorted(tool_parts.items())
-            if part["name"]
-        ]
+        reasoning_content = "".join(reasoning_parts)
+        calls = []
+        for _, part in sorted(tool_parts.items()):
+            if not part["name"]:
+                continue
+            metadata = {"reasoning_content": reasoning_content} if reasoning_content else {}
+            calls.append(ToolCall(id=part["id"], name=part["name"], arguments=json.loads(part["arguments"] or "{}"), metadata=metadata))
         return AdapterResponse(text="".join(text_parts), tool_calls=calls, usage=usage, raw={"id": response_id})

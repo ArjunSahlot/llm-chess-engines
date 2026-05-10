@@ -1,46 +1,71 @@
 from __future__ import annotations
 
 import os
+from copy import deepcopy
 from typing import Any
 
 from harness.types import AdapterResponse, Message, RunConfig, ToolCall, ToolSpec
 
 
+def _gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    converted = deepcopy(schema)
+
+    def sanitize(value: Any) -> Any:
+        if isinstance(value, dict):
+            value.pop("additionalProperties", None)
+            value.pop("additional_properties", None)
+            for nested in value.values():
+                sanitize(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                sanitize(nested)
+        return value
+
+    return sanitize(converted)
+
+
 def _function_declaration(spec: ToolSpec) -> dict[str, Any]:
-    return {"name": spec.name, "description": spec.description, "parameters": spec.schema}
+    return {"name": spec.name, "description": spec.description, "parameters": _gemini_schema(spec.schema)}
 
 
 def _contents(messages: list[Message]) -> list[dict[str, Any]]:
     contents: list[dict[str, Any]] = []
+    tool_parts: list[dict[str, Any]] = []
     for message in messages:
         if message.role == "system":
             continue
         if message.role == "tool":
-            contents.append(
+            tool_parts.append(
                 {
-                    "role": "user",
-                    "parts": [
-                        {
-                            "function_response": {
-                                "name": message.tool_name or "tool_result",
-                                "response": {"result": message.content},
-                            }
-                        }
-                    ],
+                    "function_response": {
+                        "name": message.tool_name or "tool_result",
+                        "response": {"result": message.content},
+                    }
                 }
             )
-        elif message.role == "assistant" and message.tool_calls:
+            continue
+        if tool_parts:
+            contents.append({"role": "user", "parts": tool_parts})
+            tool_parts = []
+        if message.role == "assistant" and message.tool_calls:
+            parts = []
+            for call in message.tool_calls:
+                part: dict[str, Any] = {"function_call": {"name": call.name, "args": call.arguments, "id": call.id}}
+                signature = call.metadata.get("gemini_thought_signature")
+                if signature is not None:
+                    part["thought_signature"] = signature
+                parts.append(part)
             contents.append(
                 {
                     "role": "model",
-                    "parts": [
-                        {"function_call": {"name": call.name, "args": call.arguments, "id": call.id}} for call in message.tool_calls
-                    ],
+                    "parts": parts,
                 }
             )
         else:
             role = "model" if message.role == "assistant" else "user"
             contents.append({"role": role, "parts": [{"text": message.content}]})
+    if tool_parts:
+        contents.append({"role": "user", "parts": tool_parts})
     return contents
 
 
@@ -88,11 +113,14 @@ def _parse_response(response: Any) -> tuple[str, list[ToolCall], dict[str, Any]]
                 text_parts.append(part.text)
             function_call = getattr(part, "function_call", None)
             if function_call:
+                thought_signature = getattr(part, "thought_signature", None)
+                metadata = {"gemini_thought_signature": thought_signature} if thought_signature is not None else {}
                 calls.append(
                     ToolCall(
                         id=getattr(function_call, "id", "") or function_call.name,
                         name=function_call.name,
                         arguments=dict(function_call.args or {}),
+                        metadata=metadata,
                     )
                 )
     usage = response.usage_metadata.model_dump() if getattr(response, "usage_metadata", None) else {}

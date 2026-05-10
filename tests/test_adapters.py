@@ -4,7 +4,7 @@ import sys
 from types import SimpleNamespace
 
 from adapters.anthropic import AnthropicAdapter
-from adapters.gemini import GeminiAdapter
+from adapters.gemini import GeminiAdapter, _contents, _function_declaration
 from adapters.openai import OpenAIResponsesAdapter
 from adapters.openai_compatible import OpenAICompatibleAdapter
 from harness.types import Message, RunConfig, ToolCall, ToolSpec
@@ -24,12 +24,43 @@ def test_openai_compatible_adapter_parses_tool_calls(monkeypatch) -> None:
             def create(**kwargs):
                 assert kwargs["tools"][0]["function"]["name"] == "write_file"
                 call = SimpleNamespace(id="c1", function=SimpleNamespace(name="write_file", arguments='{"path":"a"}'))
-                msg = SimpleNamespace(content="", tool_calls=[call])
+                msg = SimpleNamespace(content="", reasoning_content="think", tool_calls=[call])
                 return SimpleNamespace(choices=[SimpleNamespace(message=msg)], usage=None, id="r1")
 
     monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(OpenAI=lambda **kwargs: SimpleNamespace(chat=Chat)))
     response = OpenAICompatibleAdapter().complete([Message("user", "go")], [TOOL], CONFIG)
-    assert response.tool_calls == [ToolCall("c1", "write_file", {"path": "a"})]
+    assert response.tool_calls == [ToolCall("c1", "write_file", {"path": "a"}, {"reasoning_content": "think"})]
+
+
+def test_openai_compatible_adapter_replays_reasoning_content(monkeypatch) -> None:
+    monkeypatch.setenv("TEST_API_KEY", "x")
+    seen_messages = None
+
+    class Chat:
+        class completions:
+            @staticmethod
+            def create(**kwargs):
+                nonlocal seen_messages
+                seen_messages = kwargs["messages"]
+                msg = SimpleNamespace(content="done", tool_calls=None)
+                return SimpleNamespace(choices=[SimpleNamespace(message=msg)], usage=None, id="r1")
+
+    monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(OpenAI=lambda **kwargs: SimpleNamespace(chat=Chat)))
+    OpenAICompatibleAdapter().complete(
+        [
+            Message("user", "go"),
+            Message(
+                "assistant",
+                "",
+                tool_calls=[ToolCall("c1", "write_file", {"path": "a"}, {"reasoning_content": "think"})],
+            ),
+            Message("tool", "done", tool_call_id="c1", tool_name="write_file"),
+        ],
+        [TOOL],
+        CONFIG,
+    )
+
+    assert seen_messages[1]["reasoning_content"] == "think"
 
 
 def test_openai_compatible_adapter_streams_tool_calls(monkeypatch) -> None:
@@ -47,6 +78,7 @@ def test_openai_compatible_adapter_streams_tool_calls(monkeypatch) -> None:
                         SimpleNamespace(
                             delta=SimpleNamespace(
                                 content=None,
+                                reasoning_content="think",
                                 tool_calls=[
                                     SimpleNamespace(
                                         index=0,
@@ -65,6 +97,7 @@ def test_openai_compatible_adapter_streams_tool_calls(monkeypatch) -> None:
                         SimpleNamespace(
                             delta=SimpleNamespace(
                                 content=None,
+                                reasoning_content=None,
                                 tool_calls=[
                                     SimpleNamespace(index=0, id=None, function=SimpleNamespace(name=None, arguments=':"a"}'))
                                 ],
@@ -76,7 +109,7 @@ def test_openai_compatible_adapter_streams_tool_calls(monkeypatch) -> None:
 
     monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(OpenAI=lambda **kwargs: SimpleNamespace(chat=Chat)))
     response = OpenAICompatibleAdapter().complete([Message("user", "go")], [TOOL], STREAM_CONFIG)
-    assert response.tool_calls == [ToolCall("c1", "write_file", {"path": "a"})]
+    assert response.tool_calls == [ToolCall("c1", "write_file", {"path": "a"}, {"reasoning_content": "think"})]
 
 
 def test_openai_responses_adapter_parses_tool_calls(monkeypatch) -> None:
@@ -192,11 +225,68 @@ def test_gemini_adapter_parses_function_call(monkeypatch) -> None:
     assert response.tool_calls == [ToolCall("c1", "write_file", {"path": "a"})]
 
 
+def test_gemini_adapter_removes_unsupported_additional_properties() -> None:
+    tool = ToolSpec(
+        "nested",
+        "nested schema",
+        {
+            "type": "object",
+            "properties": {
+                "outer": {
+                    "type": "object",
+                    "properties": {"inner": {"type": "string"}},
+                    "additionalProperties": False,
+                }
+            },
+            "additionalProperties": False,
+        },
+    )
+
+    declaration = _function_declaration(tool)
+
+    assert "additionalProperties" not in declaration["parameters"]
+    assert "additionalProperties" not in declaration["parameters"]["properties"]["outer"]
+    assert "additionalProperties" in tool.schema
+
+
+def test_gemini_adapter_preserves_thought_signature() -> None:
+    signature = b"signature"
+    messages = [
+        Message("user", "go"),
+        Message(
+            "assistant",
+            "",
+            tool_calls=[ToolCall("c1", "write_file", {"path": "a"}, {"gemini_thought_signature": signature})],
+        ),
+        Message("tool", "done", tool_call_id="c1", tool_name="write_file"),
+    ]
+
+    contents = _contents(messages)
+
+    assert contents[1]["parts"][0]["thought_signature"] == signature
+    assert contents[2]["parts"][0]["function_response"]["name"] == "write_file"
+
+
+def test_gemini_adapter_groups_consecutive_tool_responses() -> None:
+    contents = _contents(
+        [
+            Message("user", "go"),
+            Message("assistant", "", tool_calls=[ToolCall("c1", "write_file", {}), ToolCall("c2", "compile_engine", {})]),
+            Message("tool", "wrote file", tool_call_id="c1", tool_name="write_file"),
+            Message("tool", "compiled", tool_call_id="c2", tool_name="compile_engine"),
+        ]
+    )
+
+    assert len(contents[2]["parts"]) == 2
+    assert contents[2]["parts"][0]["function_response"]["name"] == "write_file"
+    assert contents[2]["parts"][1]["function_response"]["name"] == "compile_engine"
+
+
 def test_gemini_adapter_streams_function_call(monkeypatch) -> None:
     monkeypatch.setenv("TEST_API_KEY", "x")
 
     call = SimpleNamespace(id="c1", name="write_file", args={"path": "a"})
-    part = SimpleNamespace(text=None, function_call=call)
+    part = SimpleNamespace(text=None, function_call=call, thought_signature=b"signature")
     content = SimpleNamespace(parts=[part])
     chunk = SimpleNamespace(candidates=[SimpleNamespace(content=content)], usage_metadata=None)
 
@@ -224,4 +314,6 @@ def test_gemini_adapter_streams_function_call(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "google.genai.types", genai.types)
 
     response = GeminiAdapter().complete([Message("user", "go")], [TOOL], STREAM_CONFIG)
-    assert response.tool_calls == [ToolCall("c1", "write_file", {"path": "a"})]
+    assert response.tool_calls == [
+        ToolCall("c1", "write_file", {"path": "a"}, {"gemini_thought_signature": b"signature"})
+    ]

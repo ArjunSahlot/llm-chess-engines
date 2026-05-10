@@ -46,7 +46,6 @@ class AnthropicAdapter:
             "system": system,
             "messages": api_messages,
             "tools": [_tool_schema(spec) for spec in tools],
-            "temperature": config.temperature,
         }
         if config.stream:
             with client.messages.stream(**params) as stream:

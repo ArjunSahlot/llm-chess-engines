@@ -45,7 +45,6 @@ class OpenAIResponsesAdapter:
             model=config.model,
             input=_input(messages),
             tools=[_tool_schema(spec) for spec in tools],
-            temperature=config.temperature,
             max_output_tokens=config.max_output_tokens,
         )
         text = getattr(response, "output_text", "") or ""
@@ -67,7 +66,6 @@ class OpenAIResponsesAdapter:
             model=config.model,
             input=_input(messages),
             tools=[_tool_schema(spec) for spec in tools],
-            temperature=config.temperature,
             max_output_tokens=config.max_output_tokens,
             stream=True,
         )
