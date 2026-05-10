@@ -54,8 +54,9 @@ def test_anthropic_adapter_parses_tool_use(monkeypatch) -> None:
         @staticmethod
         def create(**kwargs):
             assert kwargs["tools"][0]["input_schema"]["type"] == "object"
+            assert kwargs["max_tokens"] == CONFIG.max_output_tokens
             block = SimpleNamespace(type="tool_use", id="c1", name="write_file", input={"path": "a"})
-            return SimpleNamespace(content=[block], usage=None, id="r1")
+            return SimpleNamespace(content=[block], usage=None, id="r1", stop_reason="tool_use")
 
     monkeypatch.setitem(sys.modules, "anthropic", SimpleNamespace(Anthropic=lambda **kwargs: SimpleNamespace(messages=Messages)))
     response = AnthropicAdapter().complete([Message("system", "s"), Message("user", "go")], [TOOL], CONFIG)

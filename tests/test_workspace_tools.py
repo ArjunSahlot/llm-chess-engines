@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from harness.types import ToolCall
 from harness.workspace import GenerationWorkspace, safe_slug
-from tools import list_files, read_file, run_shell, write_file
+from tools import compile_engine, list_files, read_file, write_file
 
 
 def test_safe_slug_rejects_empty() -> None:
@@ -42,12 +42,12 @@ def test_compile_engine_success_and_failure(tmp_path) -> None:
     write_file.__call__(workspace, {"path": "main.cpp", "content": "int main() { return 0; }\n"})
     write_file.__call__(workspace, {"path": "Makefile", "content": "engine: main.cpp\n\tg++ -std=c++17 -O2 main.cpp -o engine\n"})
 
-    ok = run_shell.__call__(workspace, {})
+    ok = compile_engine.__call__(workspace, {})
     assert ok.ok
     assert ok.data["returncode"] == 0
 
     write_file.__call__(workspace, {"path": "main.cpp", "content": "int main( { return 0; }\n"})
-    failed = run_shell.__call__(workspace, {})
+    failed = compile_engine.__call__(workspace, {})
     assert not failed.ok
     assert failed.data["returncode"] != 0
 

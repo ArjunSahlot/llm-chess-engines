@@ -42,7 +42,7 @@ class AnthropicAdapter:
         client = Anthropic(api_key=os.environ[config.api_key_env])
         response = client.messages.create(
             model=config.model,
-            max_tokens=4096,
+            max_tokens=config.max_output_tokens,
             system=system,
             messages=api_messages,
             tools=[_tool_schema(spec) for spec in tools],
@@ -56,4 +56,9 @@ class AnthropicAdapter:
             elif block.type == "tool_use":
                 calls.append(ToolCall(id=block.id, name=block.name, arguments=dict(block.input)))
         usage = response.usage.model_dump() if getattr(response, "usage", None) else {}
-        return AdapterResponse(text="\n".join(text_parts), tool_calls=calls, usage=usage, raw={"id": response.id})
+        return AdapterResponse(
+            text="\n".join(text_parts),
+            tool_calls=calls,
+            usage=usage,
+            raw={"id": response.id, "stop_reason": getattr(response, "stop_reason", None)},
+        )

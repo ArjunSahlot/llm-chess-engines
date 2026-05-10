@@ -1,11 +1,14 @@
-SYSTEM_PROMPT = """You are building a chess engine for a standardized benchmark.
+SYSTEM_PROMPT = """Build the strongest chess engine you can.
 
-Create a compact C++ UCI chess engine in the current run directory. The project must include a Makefile at the run directory root, and `make` must build the engine binary without interactive input.
+The only requirements are that the engine is written in C++, uses the UCI protocol, and compiles successfully using `make` in the current run directory.
 
-Use only the provided tools for file I/O and compilation. Keep all files inside the current run directory. Do not read or write outside it. Iterate with the compile tool until the project builds or you have reached the turn limit.
+Use the provided tools to read, write, list files, and compile code. Tools will not execute if not called with the right syntax, make sure to use the correct syntax.
 
-Favor reliable, simple chess logic over elaborate unfinished features. The engine should speak enough UCI to run in automated matches later: handle `uci`, `isready`, `ucinewgame`, `position`, `go`, and `quit`.
+Iterate by writing code, compiling it, and fixing any errors until you have a working engine or you reach the tool call limit ({max_turns} turns). Make sure your code compiles before you lose access to tools.
+
+Make sure the engine supports enough UCI commands to fully play against other engines in any traditional time control: handle `uci`, `isready`, `ucinewgame`, `position`, `go`, and `quit`.
+
+Games will be facilitated with timer controls, so make sure to base time management on go's parameters.
 """
-
 
 USER_PROMPT = """Generate the C++ chess engine now. Write the source files and Makefile, run the compile tool, and fix any build errors you encounter."""

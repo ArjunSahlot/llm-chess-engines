@@ -8,8 +8,14 @@ from main import build_parser
 
 
 class FakeAdapter:
+    def __init__(self) -> None:
+        self.calls = 0
+
     def complete(self, messages: list[Message], tools: list[ToolSpec], config: RunConfig) -> AdapterResponse:
         assert {tool.name for tool in tools} >= {"write_file", "compile_engine"}
+        self.calls += 1
+        if self.calls > 1:
+            return AdapterResponse(text="done")
         return AdapterResponse(
             tool_calls=[
                 ToolCall("1", "write_file", {"path": "main.cpp", "content": "int main() { return 0; }\n"}),
@@ -23,7 +29,7 @@ def test_generation_runner_writes_manifest_and_transcript(tmp_path) -> None:
     config = RunConfig("fake", "model", "run-1", "NO_KEY", root=tmp_path)
     manifest = GenerationRunner(config, adapter=FakeAdapter()).run()
 
-    assert manifest.status == "compiled"
+    assert manifest.status == "completed"
     assert manifest.compile_ok
 
     run_dir = tmp_path / "fake-model" / "run-1"

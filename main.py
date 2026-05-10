@@ -20,7 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--api-key-env", help="Environment variable containing the provider API key.")
     generate.add_argument("--base-url", help="Optional OpenAI-compatible base URL.")
     generate.add_argument("--temperature", type=float, default=0.2)
-    generate.add_argument("--max-turns", type=int, default=16)
+    generate.add_argument("--max-turns", type=int, default=20)
+    generate.add_argument("--max-output-tokens", type=int, default=65536)
     generate.add_argument("--timeout-seconds", type=int, default=60)
     generate.add_argument("--root", type=Path, default=Path("generations"))
     return parser
@@ -36,6 +37,7 @@ def run_generate(args: argparse.Namespace) -> int:
         base_url=args.base_url or base_url,
         temperature=args.temperature,
         max_turns=args.max_turns,
+        max_output_tokens=args.max_output_tokens,
         timeout_seconds=args.timeout_seconds,
         root=args.root,
     )
@@ -47,6 +49,9 @@ def run_generate(args: argparse.Namespace) -> int:
 def main() -> int:
     args = build_parser().parse_args()
     if args.command == "generate":
+        from dotenv import load_dotenv
+        load_dotenv()
+
         return run_generate(args)
     raise ValueError(f"unknown command: {args.command}")
 

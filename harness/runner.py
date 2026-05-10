@@ -51,15 +51,9 @@ class GenerationRunner:
 
                 for call in response.tool_calls:
                     result = execute_tool(self.workspace, call)
-                    compile_ok = compile_ok or (result.name == "compile_engine" and result.ok)
+                    compile_ok = result.name == "compile_engine" and result.ok
                     messages.append(Message("tool", result.content, tool_call_id=call.id, tool_name=result.name))
                     self._record("tool", {"turn": turn, "call": call, "result": result})
-
-                if compile_ok:
-                    final_text = final_text or "Engine compiled successfully."
-                    self.manifest.finish(status="compiled", turns=turn, compile_ok=True, final_text=final_text)
-                    self._write_manifest()
-                    return self.manifest
 
             self.manifest.finish(status="turn_limit", turns=self.config.max_turns, compile_ok=compile_ok, final_text=final_text)
             self._write_manifest()

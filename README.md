@@ -9,6 +9,8 @@ uv run llm-chess generate --provider openai --model gpt-5.5 --run-id smoke-001
 
 Runs are isolated under `generations/[provider-model]/[run-id]`. The generated engine must be C++ with a root `Makefile`; the harness exposes only confined file tools and a `compile_engine` tool that runs `make` in the run directory.
 
+Large source files should be written in chunks with `write_file` followed by `append_file`. This avoids provider output limits truncating a tool call midway through a large file body. Use `--max-output-tokens` to raise the per-response output budget when the provider/model supports it.
+
 Provider defaults:
 
 - `openai`: `OPENAI_API_KEY`
