@@ -62,6 +62,7 @@ def test_competition_runner_persists_game_data(tmp_path) -> None:
         generations_root=tmp_path,
         results_db=db_path,
         time_control=TimeControl(movetime_ms=1),
+        openings_file=None,
         max_plies=4,
     ).run(max_games=1, forever=False)
 
@@ -75,5 +76,34 @@ def test_competition_runner_persists_game_data(tmp_path) -> None:
         pgn = db.execute("SELECT pgn FROM games").fetchone()[0]
         assert "1. e4 e5 2. Nf3 Nc6" in pgn
         assert db.execute("SELECT COUNT(*) FROM standings").fetchone()[0] == 2
+    finally:
+        db.close()
+
+
+def test_competition_cycles_time_controls_and_persists_opening(tmp_path) -> None:
+    line = ["e2e4", "e7e5", "g1f3", "b8c6"]
+    write_engine(tmp_path / "a" / "v1" / "engine", line)
+    write_engine(tmp_path / "b" / "v1" / "engine", line)
+    openings = tmp_path / "openings.txt"
+    openings.write_text("e2e4 e7e5\n", encoding="utf-8")
+    db_path = tmp_path / "results.sqlite3"
+
+    played = CompetitionRunner(
+        generations_root=tmp_path,
+        results_db=db_path,
+        time_controls=[TimeControl(movetime_ms=1), TimeControl(movetime_ms=2)],
+        openings_file=openings,
+        max_plies=4,
+    ).run(max_games=2, forever=False)
+
+    assert played == 2
+    db = sqlite3.connect(db_path)
+    try:
+        rows = db.execute("SELECT time_control_json, opening_moves, opening_fen, pgn FROM games ORDER BY scheduled_at").fetchall()
+        assert '"movetime_ms": 1' in rows[0][0]
+        assert '"movetime_ms": 2' in rows[1][0]
+        assert rows[0][1] == "e2e4 e7e5"
+        assert rows[0][2]
+        assert "Opening" in rows[0][3]
     finally:
         db.close()

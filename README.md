@@ -43,4 +43,15 @@ Clock mode is also supported:
 uv run llm-chess compete --forever --clock-ms 60000 --increment-ms 500 --move-overhead-ms 20
 ```
 
+For overnight runs, pass multiple repeatable `--time-control` values. They cycle by persisted game count, so restarting the runner continues the rotation:
+
+```bash
+uv run llm-chess compete --forever \
+  --time-control movetime:50 \
+  --time-control movetime:200 \
+  --time-control clock:60000+500
+```
+
+Openings are randomized from `competition/openings.txt` by default. Each non-empty line is a space-separated UCI move sequence, and the selected opening line, source, and resulting FEN are persisted with the game. Use `--openings-file path/to/book.txt` to swap books or `--no-openings` to disable this.
+
 Use `--max-plies`, `--handshake-timeout-seconds`, and `--move-timeout-seconds` to keep malformed generated engines from blocking the loop.

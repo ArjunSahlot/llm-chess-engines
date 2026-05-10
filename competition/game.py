@@ -6,7 +6,7 @@ import uuid
 import chess
 import chess.pgn
 
-from competition.models import CompetitionConfig, Engine
+from competition.models import CompetitionConfig, Engine, Opening, TimeControl
 from competition.store import CompetitionStore
 from competition.uci import UciEngine
 
@@ -16,18 +16,27 @@ class GameRunner:
         self.store = store
         self.config = config
 
-    def play(self, white: Engine, black: Engine) -> str:
+    def play(self, white: Engine, black: Engine, time_control: TimeControl, opening: Opening | None = None) -> str:
         game_id = uuid.uuid4().hex
-        self.store.create_game(game_id, white, black, self.config)
+        board = chess.Board()
+        opening_moves = list(opening.moves) if opening is not None else []
+        for move_text in opening_moves:
+            board.push(chess.Move.from_uci(move_text))
+        self.store.create_game(game_id, white, black, self.config, time_control, opening, board.fen())
         self.store.start_game(game_id)
 
-        board = chess.Board()
         pgn_game = chess.pgn.Game()
         pgn_game.headers["Event"] = "LLM Chess Engines Round Robin"
         pgn_game.headers["White"] = white.name
         pgn_game.headers["Black"] = black.name
+        pgn_game.headers["TimeControl"] = time_control.label()
+        if opening is not None:
+            pgn_game.headers["Opening"] = opening.label
+            pgn_game.headers["OpeningSource"] = opening.source
+            pgn_game.headers["FEN"] = board.fen()
+            pgn_game.headers["SetUp"] = "1"
         node = pgn_game
-        clocks = {chess.WHITE: self.config.time_control.init_ms, chess.BLACK: self.config.time_control.init_ms}
+        clocks = {chess.WHITE: time_control.init_ms, chess.BLACK: time_control.init_ms}
 
         engines = {
             chess.WHITE: UciEngine(white.command, white.root, lambda direction, line: self.store.record_uci(game_id, white.engine_id, direction, line)),
@@ -50,7 +59,7 @@ class GameRunner:
                 current_engine = white if side == chess.WHITE else black
                 fen_before = board.fen()
                 current.send(f"position startpos moves {' '.join(move.uci() for move in board.move_stack)}")
-                current.send(self.config.time_control.go_command(clocks[chess.WHITE], clocks[chess.BLACK]))
+                current.send(time_control.go_command(clocks[chess.WHITE], clocks[chess.BLACK]))
                 bestmove, elapsed_ms = current.wait_bestmove(self.config.move_timeout_seconds)
 
                 if bestmove == "0000":
@@ -67,8 +76,8 @@ class GameRunner:
                     break
 
                 if clocks[side] is not None:
-                    clocks[side] = max(0, clocks[side] - elapsed_ms - self.config.time_control.move_overhead_ms)
-                    clocks[side] += self.config.time_control.increment_ms
+                    clocks[side] = max(0, clocks[side] - elapsed_ms - time_control.move_overhead_ms)
+                    clocks[side] += time_control.increment_ms
                     if clocks[side] <= 0:
                         result, reason = self._forfeit(side, "flagged")
                         break

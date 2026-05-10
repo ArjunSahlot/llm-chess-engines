@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from competition.models import CompetitionConfig, Engine
+from competition.models import CompetitionConfig, Engine, Opening, TimeControl
 
 
 def now_iso() -> str:
@@ -56,6 +56,10 @@ class CompetitionStore:
                 reason TEXT,
                 pgn TEXT,
                 config_json TEXT NOT NULL,
+                time_control_json TEXT,
+                opening_moves TEXT,
+                opening_fen TEXT,
+                opening_source TEXT,
                 white_clock_ms INTEGER,
                 black_clock_ms INTEGER,
                 FOREIGN KEY (white_engine_id) REFERENCES engines(engine_id),
@@ -108,7 +112,16 @@ class CompetitionStore:
             CREATE INDEX IF NOT EXISTS idx_uci_game ON uci_events(game_id);
             """
         )
+            self._add_column("games", "time_control_json", "TEXT")
+            self._add_column("games", "opening_moves", "TEXT")
+            self._add_column("games", "opening_fen", "TEXT")
+            self._add_column("games", "opening_source", "TEXT")
             self.db.commit()
+
+    def _add_column(self, table: str, name: str, kind: str) -> None:
+        columns = {row["name"] for row in self.db.execute(f"PRAGMA table_info({table})")}
+        if name not in columns:
+            self.db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
 
     def upsert_engine(self, engine: Engine) -> None:
         ts = now_iso()
@@ -139,12 +152,24 @@ class CompetitionStore:
         )
             self.db.commit()
 
-    def create_game(self, game_id: str, white: Engine, black: Engine, config: CompetitionConfig) -> None:
+    def create_game(
+        self,
+        game_id: str,
+        white: Engine,
+        black: Engine,
+        config: CompetitionConfig,
+        time_control: TimeControl,
+        opening: Opening | None,
+        opening_fen: str,
+    ) -> None:
         with self.lock:
             self.db.execute(
             """
-            INSERT INTO games(game_id, white_engine_id, black_engine_id, scheduled_at, status, config_json, white_clock_ms, black_clock_ms)
-            VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?)
+            INSERT INTO games(
+                game_id, white_engine_id, black_engine_id, scheduled_at, status, config_json,
+                time_control_json, opening_moves, opening_fen, opening_source, white_clock_ms, black_clock_ms
+            )
+            VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 game_id,
@@ -152,8 +177,12 @@ class CompetitionStore:
                 black.engine_id,
                 now_iso(),
                 json.dumps(config.to_dict(), sort_keys=True),
-                config.time_control.init_ms,
-                config.time_control.init_ms,
+                json.dumps(time_control.to_dict(), sort_keys=True),
+                opening.label if opening is not None else "",
+                opening_fen,
+                opening.source if opening is not None else "",
+                time_control.init_ms,
+                time_control.init_ms,
             ),
         )
             self.db.commit()
@@ -231,6 +260,10 @@ class CompetitionStore:
                 """
             ).fetchall()
         return {(row["white_engine_id"], row["black_engine_id"]): int(row["n"]) for row in rows}
+
+    def game_count(self) -> int:
+        with self.lock:
+            return int(self.db.execute("SELECT COUNT(*) FROM games").fetchone()[0])
 
     def _rebuild_standings(self) -> None:
         self.db.execute("DELETE FROM standings")
