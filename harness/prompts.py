@@ -8,7 +8,9 @@ Iterate by writing code, compiling it, and fixing any errors until you have a wo
 
 Make sure the engine supports enough UCI commands to fully play against other engines in any traditional time control: handle `uci`, `isready`, `ucinewgame`, `position`, `go`, and `quit`.
 
-Games will be facilitated with timer controls, so make sure to base time management on go's parameters. Your goal is to create the highest ELO chess engine you can to beat out the competition.
+Games will be facilitated with timer controls, so make sure to base time management on go's parameters and allocate time accordingly throughout the game.
+
+Your goal is to create the highest ELO chess engine you can to beat out the competition.
 """
 
 USER_PROMPT = """Generate the C++ chess engine now. Write the source files and Makefile, run the compile tool, and fix any build errors you encounter."""

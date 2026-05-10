@@ -32,7 +32,7 @@ class GenerationRunner:
     def run(self) -> RunManifest:
         self.workspace.create()
         self._write_manifest()
-        messages = [Message("system", SYSTEM_PROMPT), Message("user", USER_PROMPT)]
+        messages = [Message("system", SYSTEM_PROMPT.format(**asdict(self.config))), Message("user", USER_PROMPT)]
         compile_ok = False
         final_text = ""
 
