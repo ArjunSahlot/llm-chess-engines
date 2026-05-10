@@ -1,0 +1,118 @@
+from __future__ import annotations
+
+import io
+import uuid
+
+import chess
+import chess.pgn
+
+from competition.models import CompetitionConfig, Engine
+from competition.store import CompetitionStore
+from competition.uci import UciEngine
+
+
+class GameRunner:
+    def __init__(self, store: CompetitionStore, config: CompetitionConfig) -> None:
+        self.store = store
+        self.config = config
+
+    def play(self, white: Engine, black: Engine) -> str:
+        game_id = uuid.uuid4().hex
+        self.store.create_game(game_id, white, black, self.config)
+        self.store.start_game(game_id)
+
+        board = chess.Board()
+        pgn_game = chess.pgn.Game()
+        pgn_game.headers["Event"] = "LLM Chess Engines Round Robin"
+        pgn_game.headers["White"] = white.name
+        pgn_game.headers["Black"] = black.name
+        node = pgn_game
+        clocks = {chess.WHITE: self.config.time_control.init_ms, chess.BLACK: self.config.time_control.init_ms}
+
+        engines = {
+            chess.WHITE: UciEngine(white.command, white.root, lambda direction, line: self.store.record_uci(game_id, white.engine_id, direction, line)),
+            chess.BLACK: UciEngine(black.command, black.root, lambda direction, line: self.store.record_uci(game_id, black.engine_id, direction, line)),
+        }
+
+        try:
+            for engine in engines.values():
+                engine.start()
+                engine.initialize(self.config.handshake_timeout_seconds)
+                engine.send("ucinewgame")
+                engine.send("isready")
+                engine.wait_for("readyok", self.config.handshake_timeout_seconds)
+
+            result = "*"
+            reason = "max plies"
+            while not board.is_game_over(claim_draw=True) and board.ply() < self.config.max_plies:
+                side = board.turn
+                current = engines[side]
+                current_engine = white if side == chess.WHITE else black
+                fen_before = board.fen()
+                current.send(f"position startpos moves {' '.join(move.uci() for move in board.move_stack)}")
+                current.send(self.config.time_control.go_command(clocks[chess.WHITE], clocks[chess.BLACK]))
+                bestmove, elapsed_ms = current.wait_bestmove(self.config.move_timeout_seconds)
+
+                if bestmove == "0000":
+                    result, reason = self._forfeit(side, "null bestmove")
+                    break
+
+                try:
+                    move = chess.Move.from_uci(bestmove)
+                except ValueError:
+                    result, reason = self._forfeit(side, f"invalid move syntax {bestmove!r}")
+                    break
+                if move not in board.legal_moves:
+                    result, reason = self._forfeit(side, f"illegal move {bestmove}")
+                    break
+
+                if clocks[side] is not None:
+                    clocks[side] = max(0, clocks[side] - elapsed_ms - self.config.time_control.move_overhead_ms)
+                    clocks[side] += self.config.time_control.increment_ms
+                    if clocks[side] <= 0:
+                        result, reason = self._forfeit(side, "flagged")
+                        break
+
+                board.push(move)
+                node = node.add_variation(move)
+                self.store.record_move(
+                    game_id,
+                    board.ply(),
+                    current_engine.engine_id,
+                    bestmove,
+                    fen_before,
+                    board.fen(),
+                    elapsed_ms,
+                    clocks[side],
+                )
+
+            if board.is_game_over(claim_draw=True):
+                result = board.result(claim_draw=True)
+                reason = board.outcome(claim_draw=True).termination.name.lower()
+            elif result == "*":
+                result = "1/2-1/2"
+
+            pgn_game.headers["Result"] = result
+            pgn_game.headers["Termination"] = reason
+            pgn = _pgn_string(pgn_game)
+            self.store.finish_game(game_id, result, reason, pgn, clocks[chess.WHITE], clocks[chess.BLACK])
+            return game_id
+        except Exception as exc:
+            self.store.record_error(game_id, None, str(exc))
+            pgn_game.headers["Result"] = "*"
+            pgn_game.headers["Termination"] = f"error: {exc}"
+            self.store.fail_game(game_id, str(exc), _pgn_string(pgn_game))
+            return game_id
+        finally:
+            for engine in engines.values():
+                engine.stop()
+
+    @staticmethod
+    def _forfeit(side: chess.Color, reason: str) -> tuple[str, str]:
+        return ("0-1" if side == chess.WHITE else "1-0", reason)
+
+
+def _pgn_string(game: chess.pgn.Game) -> str:
+    output = io.StringIO()
+    print(game, file=output, end="\n")
+    return output.getvalue()

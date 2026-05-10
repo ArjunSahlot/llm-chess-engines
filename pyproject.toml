@@ -22,4 +22,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = ["main"]
-packages = ["adapters", "chess", "harness", "tools"]
+packages = ["adapters", "competition", "harness", "tools"]

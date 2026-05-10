@@ -7,6 +7,8 @@ from pathlib import Path
 from harness.config import provider_defaults
 from harness.runner import GenerationRunner
 from harness.types import RunConfig
+from competition.models import TimeControl
+from competition.runner import CompetitionRunner
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,6 +27,20 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--no-stream", action="store_true", help="Disable provider streaming when supported.")
     generate.add_argument("--timeout-seconds", type=int, default=60)
     generate.add_argument("--root", type=Path, default=Path("generations"))
+
+    compete = subparsers.add_parser("compete", help="Run persistent round-robin games between compiled generated engines.")
+    compete.add_argument("--generations-root", type=Path, default=Path("generations"))
+    compete.add_argument("--results-db", type=Path, default=Path("results/competition.sqlite3"))
+    compete.add_argument("--forever", action="store_true", help="Keep polling for engines and playing games forever.")
+    compete.add_argument("--max-games", type=int, help="Stop after this many games. Omit with --forever for continuous play.")
+    compete.add_argument("--movetime-ms", type=int, default=100, help="Fixed per-move search time when no clock is configured.")
+    compete.add_argument("--clock-ms", type=int, help="Initial clock per side. Enables clock-based go commands.")
+    compete.add_argument("--increment-ms", type=int, default=0)
+    compete.add_argument("--move-overhead-ms", type=int, default=20)
+    compete.add_argument("--max-plies", type=int, default=240)
+    compete.add_argument("--poll-seconds", type=float, default=5.0)
+    compete.add_argument("--handshake-timeout-seconds", type=float, default=5.0)
+    compete.add_argument("--move-timeout-seconds", type=float, default=10.0)
     return parser
 
 
@@ -55,6 +71,25 @@ def main() -> int:
         load_dotenv()
 
         return run_generate(args)
+    if args.command == "compete":
+        tc = TimeControl(
+            movetime_ms=args.movetime_ms,
+            init_ms=args.clock_ms,
+            increment_ms=args.increment_ms,
+            move_overhead_ms=args.move_overhead_ms,
+        )
+        forever = args.forever or args.max_games is None
+        played = CompetitionRunner(
+            generations_root=args.generations_root,
+            results_db=args.results_db,
+            time_control=tc,
+            max_plies=args.max_plies,
+            poll_seconds=args.poll_seconds,
+            handshake_timeout_seconds=args.handshake_timeout_seconds,
+            move_timeout_seconds=args.move_timeout_seconds,
+        ).run(max_games=args.max_games, forever=forever)
+        print(f"played {played} game(s)")
+        return 0
     raise ValueError(f"unknown command: {args.command}")
 
 

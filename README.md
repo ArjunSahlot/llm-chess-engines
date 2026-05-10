@@ -22,3 +22,25 @@ Provider defaults:
 - `kimi` / `moonshot`: `MOONSHOT_API_KEY`, `https://api.moonshot.ai/v1`
 
 The v1 scope is generation and compile verification. Match running, result analysis, and ELO reporting are intentionally left for the next layer.
+
+## Run the round robin
+
+```bash
+uv run llm-chess compete --forever --movetime-ms 100
+```
+
+The competition runner discovers compiled generated engines from `generations/`, schedules the least-played ordered pairing next, validates moves with `python-chess`, and persists all engine metadata, games, moves, PGN, raw UCI output, time-control config, and aggregate scores to `results/competition.sqlite3`.
+
+Useful smoke run:
+
+```bash
+uv run llm-chess compete --max-games 2 --movetime-ms 50
+```
+
+Clock mode is also supported:
+
+```bash
+uv run llm-chess compete --forever --clock-ms 60000 --increment-ms 500 --move-overhead-ms 20
+```
+
+Use `--max-plies`, `--handshake-timeout-seconds`, and `--move-timeout-seconds` to keep malformed generated engines from blocking the loop.
