@@ -11,6 +11,7 @@ import {
   Play,
   RotateCcw,
   Search,
+  ShieldCheck,
   Swords,
   Trophy,
 } from "lucide-react";
@@ -100,12 +101,14 @@ type CompetitionData = {
 type ReplayMove = MoveRecord & {
   san: string;
   side: "white" | "black";
+  locked: boolean;
 };
 
 type Replay = {
   initialFen: string;
   positions: string[];
   moves: ReplayMove[];
+  openingPlyCount: number;
 };
 
 type MovePair = {
@@ -116,6 +119,21 @@ type MovePair = {
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const PIECES: Record<string, string> = {
+  wp: "/assets/wp.png",
+  wn: "/assets/wn.png",
+  wb: "/assets/wb.png",
+  wr: "/assets/wr.png",
+  wq: "/assets/wq.png",
+  wk: "/assets/wk.png",
+  bp: "/assets/bp.png",
+  bn: "/assets/bn.png",
+  bb: "/assets/bb.png",
+  br: "/assets/br.png",
+  bq: "/assets/bq.png",
+  bk: "/assets/bk.png",
+};
+
+const FALLBACK_PIECES: Record<string, string> = {
   wp: "♙",
   wn: "♘",
   wb: "♗",
@@ -320,13 +338,16 @@ function App() {
                 key={game.game_id}
                 onClick={() => selectGame(game.game_id)}
               >
-                <span className="game-card-result">{game.result ?? "*"}</span>
-                <span>
+                <span className={`game-card-result ${resultClass(game.result)}`}>{displayResult(game.result)}</span>
+                <span className="game-card-players">
                   <strong>{shortName(game.white_name)}</strong>
                   <em>vs</em>
                   <strong>{shortName(game.black_name)}</strong>
                 </span>
-                <small>{game.reason ?? game.status}</small>
+                <small>
+                  <span>{game.status}</span>
+                  <span>{game.reason ?? "ongoing"}</span>
+                </small>
               </button>
             ))}
           </div>
@@ -405,7 +426,11 @@ function App() {
               </dl>
               <div className="opening-box">
                 <span>Opening</span>
-                <p>{selectedGame.opening_moves || selectedGame.opening_skip_reason || "Start position"}</p>
+                <p>
+                  {replay.openingPlyCount > 0
+                    ? `${replay.openingPlyCount} locked book plies`
+                    : selectedGame.opening_skip_reason || "Start position"}
+                </p>
               </div>
               {selectedGame.errors.length > 0 && (
                 <div className="error-box">
@@ -454,9 +479,9 @@ function MoveButton({
   if (!move) return <span className="move-placeholder" />;
   const index = replay.moves.indexOf(move) + 1;
   return (
-    <button className={plyIndex === index ? "current" : ""} onClick={() => onSelect(index)}>
+    <button className={`${plyIndex === index ? "current" : ""} ${move.locked ? "locked" : ""}`} onClick={() => onSelect(index)}>
       {move.san}
-      <small>{move.elapsed_ms ?? 0}ms</small>
+      <small>{move.locked ? <ShieldCheck size={12} /> : `${move.elapsed_ms ?? 0}ms`}</small>
     </button>
   );
 }
@@ -541,7 +566,7 @@ function ChessBoard({ fen, flipped, lastMove }: { fen: string; flipped: boolean;
             return (
               <div className={`square ${isLight ? "light" : "dark"} ${lastSquares.includes(square) ? "last" : ""}`} key={square}>
                 <span className="coord rank-label">{file === files[0] ? rank : ""}</span>
-                {piece && <span className={`piece ${piece.color}`}>{PIECES[`${piece.color}${piece.type}`]}</span>}
+                {piece && <Piece pieceKey={`${piece.color}${piece.type}`} color={piece.color} />}
                 <span className="coord file-label">{rank === ranks[ranks.length - 1] ? file : ""}</span>
               </div>
             );
@@ -552,29 +577,77 @@ function ChessBoard({ fen, flipped, lastMove }: { fen: string; flipped: boolean;
   );
 }
 
+function Piece({ pieceKey, color }: { pieceKey: string; color: "w" | "b" }) {
+  const [errored, setErrored] = useState(false);
+  if (errored) {
+    return <span className={`piece fallback-piece ${color}`}>{FALLBACK_PIECES[pieceKey]}</span>;
+  }
+  return (
+    <img
+      className={`piece ${color}`}
+      src={PIECES[pieceKey]}
+      alt={pieceKey}
+      draggable={false}
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
 function buildReplay(game: Game): Replay {
-  const initialFen = game.opening_fen || new Chess().fen();
-  const chess = new Chess(initialFen);
-  const moves = [...game.moves].sort((a, b) => a.ply - b.ply);
-  const positions = [initialFen];
-  const replayMoves = moves.map((move) => {
-    const parsed = uciToMove(move.move_uci);
-    let san = move.move_uci;
+  const chess = new Chess(START_FEN);
+  const positions = [START_FEN];
+  const replayMoves: ReplayMove[] = [];
+  const openingMoves = (game.opening_moves ?? "").split(/\s+/).filter(Boolean);
+  let lockedOpeningPlies = 0;
+
+  for (const [index, moveText] of openingMoves.entries()) {
+    const fenBefore = chess.fen();
+    const side: "white" | "black" = chess.turn() === "w" ? "white" : "black";
+    const parsed = uciToMove(moveText);
+    let san = moveText;
     try {
       san = chess.move(parsed).san;
     } catch {
-      try {
+      break;
+    }
+    replayMoves.push({
+      ply: index + 1,
+      engine_id: "",
+      move_uci: moveText,
+      fen_before: fenBefore,
+      fen_after: chess.fen(),
+      elapsed_ms: null,
+      clock_ms: null,
+      san,
+      side,
+      locked: true,
+    });
+    lockedOpeningPlies += 1;
+    positions.push(chess.fen());
+  }
+
+  for (const move of [...game.moves].sort((a, b) => a.ply - b.ply)) {
+    const parsed = uciToMove(move.move_uci);
+    let san = move.move_uci;
+    try {
+      if (chess.fen() !== move.fen_before) {
         chess.load(move.fen_before);
-        san = chess.move(parsed).san;
+      }
+      san = chess.move(parsed).san;
+    } catch {
+      try {
+        chess.load(move.fen_after);
       } catch {
-        san = move.move_uci;
+        // Keep the replay usable even when a failed game has a partial trail.
       }
     }
     positions.push(move.fen_after);
-    const side: "white" | "black" = move.ply % 2 === 1 ? "white" : "black";
-    return { ...move, san, side };
-  });
-  return { initialFen, positions, moves: replayMoves };
+    const [, turn] = move.fen_before.split(" ");
+    const side: "white" | "black" = turn === "b" ? "black" : "white";
+    replayMoves.push({ ...move, san, side, locked: false });
+  }
+
+  return { initialFen: START_FEN, positions, moves: replayMoves, openingPlyCount: lockedOpeningPlies };
 }
 
 function uciToMove(uci: string) {
@@ -603,6 +676,17 @@ function pairMoves(moves: ReplayMove[]): MovePair[] {
 
 function shortName(name: string) {
   return name.replace(/^anthropic-/, "").replace(/^openai-/, "").replace(/^gemini-/, "").replace(/^deepseek-/, "");
+}
+
+function displayResult(result: string | null) {
+  if (result === "1/2-1/2") return "Draw";
+  return result ?? "*";
+}
+
+function resultClass(result: string | null) {
+  if (result === "1/2-1/2") return "draw";
+  if (result === "1-0" || result === "0-1") return "decisive";
+  return "pending";
 }
 
 function timeControlLabel(timeControl: TimeControl) {
