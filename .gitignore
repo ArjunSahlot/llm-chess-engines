@@ -220,3 +220,5 @@ __marimo__/
 generations
 results
 *:Zone.Identifier
+
+node_modules/
