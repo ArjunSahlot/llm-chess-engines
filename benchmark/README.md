@@ -11,10 +11,10 @@ npm install
 npm run dev
 ```
 
-The landing page and `/leaderboard` use a tiny static snapshot generated from
-`results/elo_leaderboard.json` and `results/competition.sqlite3`. The full game
-archive and replay views still require Supabase because they are too large to
-bundle into the deployed site.
+The landing page and `/leaderboard` use a tiny static snapshot at
+`public/data/landing-data.json`, generated from `results/elo_leaderboard.json`
+and `results/competition.sqlite3`. The full game archive and replay views still
+require Supabase because they are too large to bundle into the deployed site.
 
 Set the public Supabase variables to exercise the games archive in development:
 

@@ -381,11 +381,11 @@
     }
   ],
   "summary": {
-    "finished_games": 3129,
+    "finished_games": 3135,
     "generated_engines": 12,
-    "latest_finished_at": "2026-05-10T23:30:37.525215+00:00",
+    "latest_finished_at": "2026-05-11T04:25:50.657023+00:00",
     "llm_models": 12,
-    "moves": 82089,
-    "total_games": 3133
+    "moves": 82394,
+    "total_games": 3140
   }
 }

@@ -1,11 +1,11 @@
 import { EloBar, RecordBadge } from "@/components/LeaderboardVisuals";
 import { ModelMark } from "@/components/ModelMark";
 import { SiteNav } from "@/components/SiteNav";
-import landingData from "@/core/landing-data.json";
 import { formatInteger } from "@/core/format";
+import { landingSnapshot } from "@/core/landing-snapshot";
 import type { LandingSnapshot, LeaderboardRow } from "@/core/types";
 
-const rows = (landingData as LandingSnapshot).leaderboard as LeaderboardRow[];
+const rows = (landingSnapshot as LandingSnapshot).leaderboard as LeaderboardRow[];
 const minElo = Math.min(...rows.map((row) => row.elo));
 const maxElo = Math.max(...rows.map((row) => row.elo));
 

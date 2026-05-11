@@ -17,7 +17,7 @@ from benchmark.scripts.sync_supabase import infer_provider
 
 DEFAULT_DB = ROOT / "results" / "competition.sqlite3"
 DEFAULT_LEADERBOARD = ROOT / "results" / "elo_leaderboard.json"
-DEFAULT_OUTPUT = ROOT / "benchmark" / "src" / "core" / "landing-data.json"
+DEFAULT_OUTPUT = ROOT / "benchmark" / "public" / "data" / "landing-data.json"
 LLM_EXCLUDED_PROVIDERS = {"stockfish", "megalodon"}
 PROVIDER_META = {
     "anthropic": {"logo": "/assets/anthropic.svg", "accent": "#d89f72"},

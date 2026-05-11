@@ -73,7 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
     landing_snapshot = subparsers.add_parser("export-landing-snapshot", help="Export the small static benchmark landing snapshot.")
     landing_snapshot.add_argument("--db", type=Path, default=Path("results/competition.sqlite3"))
     landing_snapshot.add_argument("--leaderboard", type=Path, default=Path("results/elo_leaderboard.json"))
-    landing_snapshot.add_argument("--output", type=Path, default=Path("benchmark/src/core/landing-data.json"))
+    landing_snapshot.add_argument("--output", type=Path, default=Path("benchmark/public/data/landing-data.json"))
     return parser
 
 

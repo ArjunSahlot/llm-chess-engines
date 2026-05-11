@@ -4,11 +4,11 @@ import { ArrowRight, BrainCircuit, Code2, Swords, Trophy } from "lucide-react";
 import { EloBar, RecordBadge } from "@/components/LeaderboardVisuals";
 import { ModelMark } from "@/components/ModelMark";
 import { SiteNav } from "@/components/SiteNav";
-import landingData from "@/core/landing-data.json";
 import { formatDate, formatInteger } from "@/core/format";
+import { landingSnapshot } from "@/core/landing-snapshot";
 import type { BenchmarkSummary, LandingSnapshot, LeaderboardRow } from "@/core/types";
 
-const snapshot = landingData as LandingSnapshot;
+const snapshot = landingSnapshot as LandingSnapshot;
 const summary = snapshot.summary as BenchmarkSummary;
 const leaderboard = snapshot.leaderboard.slice(0, 8) as LeaderboardRow[];
 const minElo = Math.min(...snapshot.leaderboard.map((row) => row.elo));
