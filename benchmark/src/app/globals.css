@@ -1834,7 +1834,6 @@ p {
 }
 
 .game-view-page {
-  width: min(100% - 32px, 1680px);
   padding-top: 32px;
   padding-bottom: 72px;
 }
