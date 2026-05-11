@@ -6,9 +6,7 @@
   "type": "module",
   "scripts": {
     "export:landing": "python3 scripts/export_landing_snapshot.py",
-    "predev": "npm run export:landing",
     "dev": "next dev --hostname 0.0.0.0",
-    "prebuild": "npm run export:landing",
     "build": "next build",
     "lint": "next lint"
   },
