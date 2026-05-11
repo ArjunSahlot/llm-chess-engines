@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 import { SiteFooter } from "@/components/SiteFooter";
 import "./globals.css";
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <SiteFooter />
       </body>
       <Analytics />
+      <SpeedInsights />
     </html>
   );
 }
