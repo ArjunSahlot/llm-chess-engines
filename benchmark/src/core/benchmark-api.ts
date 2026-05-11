@@ -57,6 +57,7 @@ export async function fetchSummary(): Promise<BenchmarkSummary> {
 export async function fetchGames(params: {
   search?: string;
   model?: string;
+  opponent?: string;
   result?: string;
   offset?: number;
   limit?: number;
@@ -67,11 +68,15 @@ export async function fetchGames(params: {
   let query = supabase
     .from("chessbench_games_public")
     .select("*", { count: "exact" })
+    .order("plies", { ascending: false, nullsFirst: false })
     .order("finished_at", { ascending: false, nullsFirst: false })
     .range(from, to);
 
   if (params.model && params.model !== "all") {
     query = query.contains("participants", [params.model]);
+  }
+  if (params.opponent && params.opponent !== "all") {
+    query = query.contains("participants", [params.opponent]);
   }
   if (params.result && params.result !== "all") {
     if (params.result === "draws") query = query.eq("result", "1/2-1/2");

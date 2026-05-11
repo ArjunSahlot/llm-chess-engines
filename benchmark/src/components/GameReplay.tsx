@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Chess, type Color, type PieceSymbol } from "chess.js";
 import {
+  BookOpen,
   ChevronsLeft,
   ChevronsRight,
   Clock3,
@@ -10,9 +11,11 @@ import {
   Gauge,
   Pause,
   Play,
+  RotateCcw,
   SkipBack,
   SkipForward,
   ShieldAlert,
+  TimerReset,
 } from "lucide-react";
 
 import { durationLabel, formatInteger, formatShortDate, modelLabel, providerLabel, resultLabel, timeControlLabel } from "@/core/format";
@@ -59,6 +62,7 @@ export function GameReplay({ detail, models, loading = false }: { detail: GameDe
   const replay = useMemo(() => buildReplay(detail), [detail]);
   const activeFen = replay.positions[Math.min(plyIndex, replay.positions.length - 1)] ?? START_FEN;
   const activeMove = replay.moves[Math.max(0, plyIndex - 1)] ?? null;
+  const maxPly = Math.max(0, replay.positions.length - 1);
   const white = models.find((model) => model.engine_id === detail.white_engine_id);
   const black = models.find((model) => model.engine_id === detail.black_engine_id);
 
@@ -71,13 +75,13 @@ export function GameReplay({ detail, models, loading = false }: { detail: GameDe
     if (!playing) {
       return;
     }
-    if (plyIndex >= replay.positions.length - 1) {
+    if (plyIndex >= maxPly) {
       setPlaying(false);
       return;
     }
     const timer = window.setTimeout(() => setPlyIndex((value) => value + 1), 520);
     return () => window.clearTimeout(timer);
-  }, [playing, plyIndex, replay.positions.length]);
+  }, [maxPly, playing, plyIndex]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -114,40 +118,43 @@ export function GameReplay({ detail, models, loading = false }: { detail: GameDe
           />
         </div>
 
-        <ChessBoard fen={activeFen} flipped={flipped} lastMove={activeMove?.move_uci ?? ""} />
+        <div className="board-theater">
+          <div className="side-controls left">
+            <button title="First move" onClick={() => setPlyIndex(0)}>
+              <ChevronsLeft size={19} />
+            </button>
+            <button title="Previous move" onClick={() => setPlyIndex((value) => Math.max(0, value - 1))}>
+              <SkipBack size={19} />
+            </button>
+          </div>
+          <ChessBoard fen={activeFen} flipped={flipped} lastMove={activeMove?.move_uci ?? ""} />
+          <div className="side-controls right">
+            <button title="Next move" onClick={() => setPlyIndex((value) => Math.min(maxPly, value + 1))}>
+              <SkipForward size={19} />
+            </button>
+            <button title="Last move" onClick={() => setPlyIndex(maxPly)}>
+              <ChevronsRight size={19} />
+            </button>
+          </div>
+        </div>
 
-        <div className="transport-bar">
+        <div className="transport-bar cinematic">
           {loading && <span className="replay-loading-inline">Refreshing game data...</span>}
-          <button title="First move" onClick={() => setPlyIndex(0)}>
-            <ChevronsLeft size={18} />
-          </button>
-          <button title="Previous move" onClick={() => setPlyIndex((value) => Math.max(0, value - 1))}>
-            <SkipBack size={18} />
+          <button title="Reset" onClick={() => setPlyIndex(0)}>
+            <RotateCcw size={18} />
           </button>
           <button className="play-control" title={playing ? "Pause" : "Play"} onClick={() => setPlaying((value) => !value)}>
             {playing ? <Pause size={18} /> : <Play size={18} />}
           </button>
-          <button title="Next move" onClick={() => setPlyIndex((value) => Math.min(replay.positions.length - 1, value + 1))}>
-            <SkipForward size={18} />
-          </button>
-          <button title="Last move" onClick={() => setPlyIndex(replay.positions.length - 1)}>
-            <ChevronsRight size={18} />
-          </button>
+          <label className="move-slider">
+            <input min={0} max={maxPly} type="range" value={plyIndex} onChange={(event) => setPlyIndex(Number(event.target.value))} />
+            <span>
+              Ply {plyIndex}/{maxPly}
+            </span>
+          </label>
           <button title="Flip board" onClick={() => setFlipped((value) => !value)}>
             <FlipHorizontal2 size={18} />
           </button>
-          <label className="move-slider">
-            <input
-              min={0}
-              max={Math.max(0, replay.positions.length - 1)}
-              type="range"
-              value={plyIndex}
-              onChange={(event) => setPlyIndex(Number(event.target.value))}
-            />
-            <span>
-              {plyIndex}/{Math.max(0, replay.positions.length - 1)}
-            </span>
-          </label>
         </div>
       </div>
 
@@ -158,22 +165,10 @@ export function GameReplay({ detail, models, loading = false }: { detail: GameDe
           <DetailStat icon={<ShieldAlert size={17} />} label="Result" value={resultLabel(detail.result)} />
         </div>
 
-        <div className="opening-panel">
-          <span>Book phase</span>
-          <strong>{replay.openingPlyCount > 0 ? `${replay.openingPlyCount} opening plies` : "No opening book"}</strong>
-          <p>{detail.opening_skip_reason || "Opening moves are marked as book moves in the move list."}</p>
-        </div>
-
-        <div className="opening-panel">
-          <span>Time control</span>
-          <strong>{timeControlLabel(detail.time_control)}</strong>
-          <p>Final clocks: white {formatClock(detail.white_clock_ms)}, black {formatClock(detail.black_clock_ms)}.</p>
-        </div>
-
-        <div className="opening-panel">
-          <span>Termination</span>
-          <strong>{detail.reason ?? detail.status}</strong>
-          <p>{detail.result_source?.includes("forfeit") ? "This result was assigned by forfeit handling." : "This result came from completed game play."}</p>
+        <div className="storyline-panel">
+          <StoryBeat icon={<BookOpen size={17} />} label="Opening" value={replay.openingPlyCount > 0 ? `${replay.openingPlyCount} book plies` : "No book"} detail={detail.opening_skip_reason || detail.opening_source || "Moves below show where the game left preparation."} />
+          <StoryBeat icon={<TimerReset size={17} />} label="Clock" value={timeControlLabel(detail.time_control)} detail={`Final clocks: W ${formatClock(detail.white_clock_ms)} / B ${formatClock(detail.black_clock_ms)}`} />
+          <StoryBeat icon={<ShieldAlert size={17} />} label="Ending" value={detail.reason ?? detail.status} detail={detail.result_source?.includes("forfeit") ? "Assigned by forfeit handling." : "Resolved from completed game play."} />
         </div>
 
         {detail.errors.length > 0 && (
@@ -183,7 +178,7 @@ export function GameReplay({ detail, models, loading = false }: { detail: GameDe
           </div>
         )}
 
-        <div className="move-table" aria-label="Move list">
+        <div className="move-table redesigned" aria-label="Move list">
           {pairMoves(replay.moves).map((pair) => (
             <div className="move-row" key={pair.moveNumber}>
               <span>{pair.moveNumber}</span>
@@ -232,6 +227,17 @@ function DetailStat({ icon, label, value }: { icon: React.ReactNode; label: stri
       {icon}
       <span>{label}</span>
       <strong>{value}</strong>
+    </div>
+  );
+}
+
+function StoryBeat({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
+  return (
+    <div className="story-beat">
+      <span className="story-icon">{icon}</span>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <p>{detail}</p>
     </div>
   );
 }
