@@ -311,7 +311,18 @@ function ModelMenu({
         {icon}
         <span>
           <small>{label}</small>
-          <strong>{selected ? selected.label : "All models"}</strong>
+          {selected ? (
+            <span className="selected-model-value" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {(() => {
+                const logoSrc = selected.logo || (selected.provider ? `/assets/${selected.provider}.svg` : null);
+                const isBlackLogo = selected.provider === "openai";
+                return logoSrc ? <img src={logoSrc} alt="" style={{ width: "16px", height: "16px", borderRadius: "2px", filter: isBlackLogo ? "invert(1)" : "none" }} /> : null;
+              })()}
+              <strong>{selected.label}</strong>
+            </span>
+          ) : (
+            <strong>All models</strong>
+          )}
         </span>
       </button>
       {open && (

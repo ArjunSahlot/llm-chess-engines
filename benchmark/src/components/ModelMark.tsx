@@ -5,10 +5,11 @@ type MarkModel = Pick<LeaderboardRow, "name" | "provider_model" | "label" | "pro
 
 export function ModelMark({ model, compact = false }: { model: MarkModel; compact?: boolean }) {
   const label = model.label || modelLabel(model);
+  const logoSrc = model.logo || (model.provider ? `/assets/${model.provider}.svg` : null);
   return (
     <span className={`model-mark ${compact ? "compact" : ""}`}>
       <span className="logo-shell" style={{ borderColor: model.accent }}>
-        {model.logo ? <img src={model.logo} alt="" /> : <span>{label.slice(0, 1)}</span>}
+        {logoSrc ? <img src={logoSrc} alt="" /> : <span>{label.slice(0, 1)}</span>}
       </span>
       <span className="model-copy">
         <strong>{label}</strong>

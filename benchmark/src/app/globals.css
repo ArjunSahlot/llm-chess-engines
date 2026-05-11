@@ -1630,7 +1630,7 @@ p {
   flex: 0 0 auto;
 }
 
-.menu-trigger span {
+.menu-trigger > span {
   display: grid;
   min-width: 0;
 }
