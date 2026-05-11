@@ -39,7 +39,7 @@ export default function LeaderboardPage() {
               <EloBar row={row} minElo={minElo} maxElo={maxElo} />
               <span className="score-points">{row.score.toFixed(1)} / {formatInteger(row.games)}</span>
               <RecordBadge row={row} />
-              <span>{row.avg_opponent_elo ? formatInteger(row.avg_opponent_elo) : "n/a"}</span>
+              <span className="avg-opponent-cell">{row.avg_opponent_elo ? formatInteger(row.avg_opponent_elo) : "n/a"}</span>
             </div>
           ))}
         </div>

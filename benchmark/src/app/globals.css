@@ -993,6 +993,11 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+.avg-opponent-cell {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .schema-callout {
   display: flex;
   align-items: center;
@@ -2026,6 +2031,15 @@ p {
     order: 3;
     justify-content: flex-start;
     overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .site-nav nav a {
+    padding-inline: 9px;
+  }
+
+  .site-nav nav::-webkit-scrollbar {
+    display: none;
   }
 
   .hero-shell {
@@ -2181,5 +2195,125 @@ p {
   .move-slider,
   .transport-bar.cinematic .move-slider {
     grid-column: 1 / -1;
+  }
+
+  .leaderboard-page {
+    padding-top: 42px;
+  }
+
+  .table-hero {
+    margin-bottom: 18px;
+  }
+
+  .table-hero h1 {
+    font-size: 3rem;
+  }
+
+  .leaderboard-table {
+    display: grid;
+    gap: 10px;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .leaderboard-table-head {
+    display: none;
+  }
+
+  .leaderboard-table-row {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "rank model elo"
+      "rank score score"
+      "rank record opponent";
+    gap: 8px 10px;
+    align-items: start;
+    min-height: 0;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background:
+      linear-gradient(90deg, rgba(112, 230, 164, 0.045), transparent 46%),
+      rgba(17, 19, 22, 0.9);
+  }
+
+  .leaderboard-table-row .rank-cell {
+    display: grid;
+    grid-area: rank;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.82rem;
+  }
+
+  .leaderboard-table-row .model-mark {
+    grid-area: model;
+    align-self: center;
+  }
+
+  .leaderboard-table-row .model-copy strong {
+    max-width: 44vw;
+    font-size: 1rem;
+  }
+
+  .leaderboard-table-row .logo-shell {
+    width: 38px;
+    height: 38px;
+  }
+
+  .leaderboard-table-row .elo-bar-cell {
+    grid-area: elo;
+    justify-items: end;
+    min-width: 70px;
+  }
+
+  .leaderboard-table-row .elo-bar-cell strong {
+    font-size: 1.12rem;
+    text-align: right;
+  }
+
+  .leaderboard-table-row .elo-bar-track {
+    width: 58px;
+    height: 6px;
+  }
+
+  .leaderboard-table-row .score-points {
+    grid-area: score;
+    padding-top: 2px;
+    color: #c4c9d3;
+    font-size: 0.9rem;
+  }
+
+  .leaderboard-table-row .record-badge {
+    grid-area: record;
+    padding: 8px;
+  }
+
+  .leaderboard-table-row .avg-opponent-cell {
+    grid-area: opponent;
+    align-self: stretch;
+    display: grid;
+    align-content: center;
+    min-width: 76px;
+    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.16);
+    color: var(--text);
+    font-size: 0.92rem;
+    text-align: right;
+  }
+
+  .leaderboard-table-row .avg-opponent-cell::before {
+    content: "Avg opp";
+    margin-bottom: 3px;
+    color: var(--faint);
+    font-size: 0.66rem;
+    font-weight: 850;
+    text-transform: uppercase;
   }
 }
