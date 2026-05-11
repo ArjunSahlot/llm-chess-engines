@@ -218,9 +218,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 generations
-results/*
-!results/elo_leaderboard.json
-!results/elo_anchors.json
+results
 *:Zone.Identifier
 
 node_modules/
