@@ -149,7 +149,7 @@ export function GameReplay({ detail, models, loading = false }: { detail: GameDe
           <label className="move-slider">
             <input min={0} max={maxPly} type="range" value={plyIndex} onChange={(event) => setPlyIndex(Number(event.target.value))} />
             <span>
-              Ply {plyIndex}/{maxPly}
+              Replay {plyIndex}/{maxPly}
             </span>
           </label>
           <button title="Flip board" onClick={() => setFlipped((value) => !value)}>
@@ -160,7 +160,7 @@ export function GameReplay({ detail, models, loading = false }: { detail: GameDe
 
       <aside className="replay-side">
         <div className="detail-stat-grid">
-          <DetailStat icon={<Gauge size={17} />} label="Ply count" value={formatInteger(detail.plies)} />
+          <DetailStat icon={<Gauge size={17} />} label="Recorded plies" value={formatInteger(detail.plies)} />
           <DetailStat icon={<Clock3 size={17} />} label="Avg move" value={durationLabel(detail.avg_elapsed_ms)} />
           <DetailStat icon={<ShieldAlert size={17} />} label="Result" value={resultLabel(detail.result)} />
         </div>
