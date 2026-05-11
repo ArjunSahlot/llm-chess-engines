@@ -10,6 +10,9 @@ from harness.types import RunConfig
 from competition.models import TimeControl
 from competition.runner import CompetitionRunner
 
+from dotenv import load_dotenv
+load_dotenv()
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Benchmark LLMs by generating C++ chess engines.")
@@ -66,10 +69,6 @@ def build_parser() -> argparse.ArgumentParser:
     sync_supabase.add_argument("--batch-size", type=int, default=500)
     sync_supabase.add_argument("--dry-run", action="store_true")
     sync_supabase.add_argument("--include-uci", action="store_true", help="Also sync raw UCI event lines.")
-
-    migrate = subparsers.add_parser("migrate-results", help="Migrate legacy failed games into explicit forfeit/ignored results.")
-    migrate.add_argument("--results-db", type=Path, default=Path("results/competition.sqlite3"))
-    migrate.add_argument("--no-backup", action="store_true", help="Do not write a timestamped SQLite backup before migrating.")
     return parser
 
 
@@ -96,9 +95,6 @@ def run_generate(args: argparse.Namespace) -> int:
 def main() -> int:
     args = build_parser().parse_args()
     if args.command == "generate":
-        from dotenv import load_dotenv
-        load_dotenv()
-
         return run_generate(args)
     if args.command == "compete":
         if args.time_control:
@@ -129,16 +125,6 @@ def main() -> int:
         from leaderboard_tui import run as run_leaderboard
 
         return run_leaderboard(args)
-    if args.command == "migrate-results":
-        from competition.results_migration import migrate_results_db
-
-        summary = migrate_results_db(args.results_db, create_backup=not args.no_backup)
-        if summary.backup_path is not None:
-            print(f"backup: {summary.backup_path}")
-        print(f"fixed failed games: {summary.fixed_failed_games}")
-        print(f"ignored failed games: {summary.ignored_failed_games}")
-        print(f"annotated finished games: {summary.annotated_finished_games}")
-        return 0
     if args.command == "sync-supabase":
         from benchmark.scripts.sync_supabase import main as sync_supabase_main
 

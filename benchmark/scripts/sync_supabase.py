@@ -26,10 +26,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--include-uci", action="store_true", help="Sync raw UCI event lines. This can be large.")
     args = parser.parse_args(argv)
 
-    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "").rstrip("/")
+    service_key = os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
     if not args.dry_run and (not supabase_url or not service_key):
-        raise SystemExit("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or run with --dry-run.")
+        raise SystemExit("Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, or run with --dry-run.")
     if not args.db.exists():
         raise SystemExit(f"Competition database not found: {args.db}")
 
