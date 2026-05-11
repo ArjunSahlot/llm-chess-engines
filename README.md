@@ -1,3 +1,5 @@
+<img width="1386" height="1064" alt="image" src="https://github.com/user-attachments/assets/fa7f0556-79d2-4842-847e-4d918ee4a6ac" />
+
 # ChessBench
 
 Benchmarking LLMs' ability to generate strong chess engines in a standardized harness.
