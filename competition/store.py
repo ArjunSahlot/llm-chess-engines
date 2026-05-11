@@ -124,6 +124,9 @@ class CompetitionStore:
             self._add_column("games", "opening_fen", "TEXT")
             self._add_column("games", "opening_source", "TEXT")
             self._add_column("games", "opening_skip_reason", "TEXT")
+            self._add_column("games", "result_source", "TEXT")
+            self._add_column("games", "forfeiting_engine_id", "TEXT")
+            self._add_column("games", "migration_note", "TEXT")
             self.db.commit()
 
     def _add_column(self, table: str, name: str, kind: str) -> None:
@@ -202,14 +205,34 @@ class CompetitionStore:
             self.db.execute("UPDATE games SET status='running', started_at=? WHERE game_id=?", (now_iso(), game_id))
             self.db.commit()
 
-    def finish_game(self, game_id: str, result: str, reason: str, pgn: str, white_clock_ms: int | None, black_clock_ms: int | None) -> None:
+    def finish_game(
+        self,
+        game_id: str,
+        result: str,
+        reason: str,
+        pgn: str,
+        white_clock_ms: int | None,
+        black_clock_ms: int | None,
+        result_source: str = "game",
+        forfeiting_engine_id: str | None = None,
+    ) -> None:
         with self.lock:
             self.db.execute(
             """
-            UPDATE games SET status='finished', finished_at=?, result=?, reason=?, pgn=?, white_clock_ms=?, black_clock_ms=?
+            UPDATE games SET
+                status='finished',
+                finished_at=?,
+                result=?,
+                reason=?,
+                pgn=?,
+                white_clock_ms=?,
+                black_clock_ms=?,
+                result_source=?,
+                forfeiting_engine_id=?,
+                migration_note=NULL
             WHERE game_id=?
             """,
-            (now_iso(), result, reason, pgn, white_clock_ms, black_clock_ms, game_id),
+            (now_iso(), result, reason, pgn, white_clock_ms, black_clock_ms, result_source, forfeiting_engine_id, game_id),
         )
             self._rebuild_standings()
             self.db.commit()
@@ -217,7 +240,7 @@ class CompetitionStore:
     def fail_game(self, game_id: str, reason: str, pgn: str = "") -> None:
         with self.lock:
             self.db.execute(
-            "UPDATE games SET status='failed', finished_at=?, reason=?, pgn=? WHERE game_id=?",
+            "UPDATE games SET status='failed', finished_at=?, reason=?, pgn=?, result_source='failed' WHERE game_id=?",
             (now_iso(), reason, pgn, game_id),
         )
             self.db.commit()
@@ -270,6 +293,64 @@ class CompetitionStore:
                 """
             ).fetchall()
         return {(row["white_engine_id"], row["black_engine_id"]): int(row["n"]) for row in rows}
+
+    def pair_counts_by_name(self) -> dict[tuple[str, str], int]:
+        with self.lock:
+            rows = self.db.execute(
+                """
+                SELECT white.name AS white_name, black.name AS black_name, COUNT(*) AS n
+                FROM games
+                JOIN engines AS white ON white.engine_id = games.white_engine_id
+                JOIN engines AS black ON black.engine_id = games.black_engine_id
+                WHERE status IN ('finished', 'failed', 'running', 'scheduled')
+                GROUP BY white.name, black.name
+                """
+            ).fetchall()
+        return {(row["white_name"], row["black_name"]): int(row["n"]) for row in rows}
+
+    def engine_game_counts(self) -> dict[str, int]:
+        with self.lock:
+            rows = self.db.execute(
+                """
+                SELECT engine_id, SUM(n) AS n
+                FROM (
+                    SELECT white_engine_id AS engine_id, COUNT(*) AS n
+                    FROM games
+                    WHERE status IN ('finished', 'failed', 'running', 'scheduled')
+                    GROUP BY white_engine_id
+                    UNION ALL
+                    SELECT black_engine_id AS engine_id, COUNT(*) AS n
+                    FROM games
+                    WHERE status IN ('finished', 'failed', 'running', 'scheduled')
+                    GROUP BY black_engine_id
+                )
+                GROUP BY engine_id
+                """
+            ).fetchall()
+        return {row["engine_id"]: int(row["n"]) for row in rows}
+
+    def engine_game_counts_by_name(self) -> dict[str, int]:
+        with self.lock:
+            rows = self.db.execute(
+                """
+                SELECT name, SUM(n) AS n
+                FROM (
+                    SELECT engines.name AS name, COUNT(*) AS n
+                    FROM games
+                    JOIN engines ON engines.engine_id = games.white_engine_id
+                    WHERE status IN ('finished', 'failed', 'running', 'scheduled')
+                    GROUP BY engines.name
+                    UNION ALL
+                    SELECT engines.name AS name, COUNT(*) AS n
+                    FROM games
+                    JOIN engines ON engines.engine_id = games.black_engine_id
+                    WHERE status IN ('finished', 'failed', 'running', 'scheduled')
+                    GROUP BY engines.name
+                )
+                GROUP BY name
+                """
+            ).fetchall()
+        return {row["name"]: int(row["n"]) for row in rows}
 
     def game_count(self) -> int:
         with self.lock:

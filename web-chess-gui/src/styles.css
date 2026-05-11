@@ -621,7 +621,8 @@ select {
 
 .detail-grid div,
 .opening-box,
-.error-box {
+.error-box,
+.migration-note {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -657,6 +658,12 @@ dd {
   margin-bottom: 10px;
   color: #ffd6cf;
   border-color: rgba(208, 112, 95, 0.42);
+}
+
+.migration-note {
+  margin-bottom: 10px;
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .move-table {

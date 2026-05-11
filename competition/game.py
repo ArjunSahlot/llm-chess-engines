@@ -52,35 +52,63 @@ class GameRunner:
         }
 
         try:
-            for engine in engines.values():
-                engine.start()
-                engine.initialize(self.config.handshake_timeout_seconds)
-                engine.send("ucinewgame")
-                engine.send("isready")
-                engine.wait_for("readyok", self.config.handshake_timeout_seconds)
+            for side, engine in engines.items():
+                current_engine = white if side == chess.WHITE else black
+                try:
+                    engine.start()
+                    engine.initialize(self.config.handshake_timeout_seconds)
+                    engine.send("ucinewgame")
+                    engine.send("isready")
+                    engine.wait_for("readyok", self.config.handshake_timeout_seconds)
+                except Exception as exc:
+                    self.store.record_error(game_id, current_engine.engine_id, str(exc))
+                    result, reason = self._forfeit(side, f"engine error: {exc}")
+                    pgn_game.headers["Result"] = result
+                    pgn_game.headers["Termination"] = reason
+                    self.store.finish_game(
+                        game_id,
+                        result,
+                        reason,
+                        _pgn_string(pgn_game),
+                        clocks[chess.WHITE],
+                        clocks[chess.BLACK],
+                        result_source="forfeit",
+                        forfeiting_engine_id=current_engine.engine_id,
+                    )
+                    return game_id
 
             result = "*"
             reason = "max plies"
+            forfeiting_engine_id: str | None = None
             while not board.is_game_over(claim_draw=True) and board.ply() < self.config.max_plies:
                 side = board.turn
                 current = engines[side]
                 current_engine = white if side == chess.WHITE else black
                 fen_before = board.fen()
-                current.send(f"position fen {fen_before}")
-                current.send(time_control.go_command(clocks[chess.WHITE], clocks[chess.BLACK]))
-                bestmove, elapsed_ms = current.wait_bestmove(self.config.move_timeout_seconds)
+                try:
+                    current.send(f"position fen {fen_before}")
+                    current.send(time_control.go_command(clocks[chess.WHITE], clocks[chess.BLACK]))
+                    bestmove, elapsed_ms = current.wait_bestmove(self.config.move_timeout_seconds)
+                except Exception as exc:
+                    self.store.record_error(game_id, current_engine.engine_id, str(exc))
+                    result, reason = self._forfeit(side, f"engine error: {exc}")
+                    forfeiting_engine_id = current_engine.engine_id
+                    break
 
                 if bestmove == "0000":
                     result, reason = self._forfeit(side, "null bestmove")
+                    forfeiting_engine_id = current_engine.engine_id
                     break
 
                 try:
                     move = chess.Move.from_uci(bestmove)
                 except ValueError:
                     result, reason = self._forfeit(side, f"invalid move syntax {bestmove!r}")
+                    forfeiting_engine_id = current_engine.engine_id
                     break
                 if move not in board.legal_moves:
                     result, reason = self._forfeit(side, f"illegal move {bestmove}")
+                    forfeiting_engine_id = current_engine.engine_id
                     break
 
                 if clocks[side] is not None:
@@ -88,6 +116,7 @@ class GameRunner:
                     clocks[side] += time_control.increment_ms
                     if clocks[side] <= 0:
                         result, reason = self._forfeit(side, "flagged")
+                        forfeiting_engine_id = current_engine.engine_id
                         break
 
                 board.push(move)
@@ -112,7 +141,16 @@ class GameRunner:
             pgn_game.headers["Result"] = result
             pgn_game.headers["Termination"] = reason
             pgn = _pgn_string(pgn_game)
-            self.store.finish_game(game_id, result, reason, pgn, clocks[chess.WHITE], clocks[chess.BLACK])
+            self.store.finish_game(
+                game_id,
+                result,
+                reason,
+                pgn,
+                clocks[chess.WHITE],
+                clocks[chess.BLACK],
+                result_source="forfeit" if forfeiting_engine_id is not None else "game",
+                forfeiting_engine_id=forfeiting_engine_id,
+            )
             return game_id
         except Exception as exc:
             self.store.record_error(game_id, None, str(exc))

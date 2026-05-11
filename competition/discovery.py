@@ -30,7 +30,7 @@ def discover_engines(generations_root: Path) -> list[Engine]:
             continue
         provider_model = run_dir.parent.name
         run_id = run_dir.name
-        engine_id = _engine_id(provider_model, run_id, executable)
+        engine_id = _engine_id(provider_model, run_id)
         engines.append(
             Engine(
                 engine_id=engine_id,
@@ -70,6 +70,6 @@ def _find_executable(run_dir: Path) -> Path | None:
     return candidates[0]
 
 
-def _engine_id(provider_model: str, run_id: str, executable: Path) -> str:
-    payload = f"{provider_model}\0{run_id}\0{executable.resolve()}"
+def _engine_id(provider_model: str, run_id: str) -> str:
+    payload = f"{provider_model}\0{run_id}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]

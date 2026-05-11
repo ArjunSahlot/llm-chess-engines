@@ -40,6 +40,7 @@ type Standing = {
 type MoveRecord = {
   ply: number;
   engine_id: string;
+  raw_engine_id?: string;
   move_uci: string;
   fen_before: string;
   fen_after: string;
@@ -49,6 +50,7 @@ type MoveRecord = {
 
 type GameError = {
   engine_id: string | null;
+  raw_engine_id?: string | null;
   message: string;
   created_at: string;
 };
@@ -64,6 +66,8 @@ type Game = {
   game_id: string;
   white_engine_id: string;
   black_engine_id: string;
+  raw_white_engine_id?: string;
+  raw_black_engine_id?: string;
   white_name: string;
   black_name: string;
   scheduled_at: string;
@@ -72,6 +76,9 @@ type Game = {
   status: string;
   result: string | null;
   reason: string | null;
+  result_source: string | null;
+  forfeiting_engine_id: string | null;
+  migration_note: string | null;
   pgn: string | null;
   time_control: TimeControl;
   opening_moves: string | null;
@@ -92,6 +99,8 @@ type CompetitionData = {
     moves: number;
     finished: number;
     failed: number;
+    ignored?: number;
+    migrated_forfeits?: number;
   };
   engines: Engine[];
   standings: Standing[];
@@ -287,6 +296,7 @@ function App() {
           <Stat icon={<Swords />} label="Games" value={data.summary.games.toLocaleString()} />
           <Stat icon={<Gauge />} label="Moves" value={data.summary.moves.toLocaleString()} />
           <Stat icon={<Trophy />} label="Engines" value={data.summary.engines.toLocaleString()} />
+          <Stat icon={<ShieldCheck />} label="Migrated" value={(data.summary.migrated_forfeits ?? 0).toLocaleString()} />
         </div>
       </header>
 
@@ -326,6 +336,7 @@ function App() {
                 <option value="all">All statuses</option>
                 <option value="finished">Finished</option>
                 <option value="failed">Failed</option>
+                <option value="ignored">Ignored</option>
                 <option value="running">Running</option>
                 <option value="scheduled">Scheduled</option>
               </select>
@@ -423,7 +434,12 @@ function App() {
                   <dt>Termination</dt>
                   <dd>{selectedGame.reason ?? "ongoing"}</dd>
                 </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd>{resultSourceLabel(selectedGame)}</dd>
+                </div>
               </dl>
+              {selectedGame.migration_note && <div className="migration-note">{selectedGame.migration_note}</div>}
               <div className="opening-box">
                 <span>Opening</span>
                 <p>
@@ -681,6 +697,21 @@ function shortName(name: string) {
 function displayResult(result: string | null) {
   if (result === "1/2-1/2") return "Draw";
   return result ?? "*";
+}
+
+function resultSourceLabel(game: Game) {
+  if (game.result_source === "migrated_forfeit") {
+    const side =
+      game.forfeiting_engine_id === game.white_engine_id
+        ? "white"
+        : game.forfeiting_engine_id === game.black_engine_id
+          ? "black"
+          : "unknown";
+    return `migrated forfeit (${side})`;
+  }
+  if (game.result_source === "forfeit") return "forfeit";
+  if (game.result_source === "migration_ignored") return "ignored legacy failure";
+  return game.result_source ?? "game";
 }
 
 function resultClass(result: string | null) {

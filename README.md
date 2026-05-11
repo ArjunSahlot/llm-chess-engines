@@ -57,3 +57,23 @@ Openings are randomized from `competition/openings.txt` by default. Each non-emp
 Before an engine receives opening positions, the runner probes whether it can return a legal move from a non-start FEN. Engines that fail still play in the round robin, but from startpos only; the skip reason is stored in SQLite and PGN as `OpeningSkipped`.
 
 Use `--max-plies`, `--handshake-timeout-seconds`, and `--move-timeout-seconds` to keep malformed generated engines from blocking the loop.
+
+## Build the ELO leaderboard
+
+```bash
+uv run llm-chess leaderboard
+```
+
+The leaderboard TUI reads `results/competition.sqlite3`, lets you set known anchor ratings for engines such as Stockfish, and saves `results/elo_anchors.json`, `results/elo_leaderboard.json`, and `results/elo_leaderboard.md`. You can also run it non-interactively:
+
+```bash
+uv run llm-chess leaderboard --anchor stockfish=3200 --no-tui
+```
+
+If you have an older results database, migrate legacy failed games into explicit forfeits before trusting the leaderboard:
+
+```bash
+uv run llm-chess migrate-results
+```
+
+The migration writes a timestamped SQLite backup, converts inferable engine timeouts/exits into finished forfeit games, and marks ambiguous failed rows as ignored.

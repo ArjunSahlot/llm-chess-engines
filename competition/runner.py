@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import time
 from itertools import permutations
 from pathlib import Path
@@ -10,6 +11,9 @@ from competition.game import GameRunner
 from competition.models import CompetitionConfig, TimeControl
 from competition.openings import OpeningBook
 from competition.store import CompetitionStore
+
+
+CATCH_UP_GAME_MARGIN = 20
 
 
 class CompetitionRunner:
@@ -71,9 +75,36 @@ class CompetitionRunner:
     def _next_pairing(store: CompetitionStore, engines):
         if len(engines) < 2:
             return None
-        counts = store.pair_counts()
+        counts = store.pair_counts_by_name()
+        engine_counts = store.engine_game_counts_by_name()
+        max_engine_games = max(engine_counts.get(engine.name, 0) for engine in engines)
+        catch_up_floor = max(0, max_engine_games - CATCH_UP_GAME_MARGIN)
+        deficits = {engine.name: max(0, catch_up_floor - engine_counts.get(engine.name, 0)) for engine in engines}
+
+        catch_up_engines = [engine for engine in engines if deficits[engine.name] > 0]
+        if catch_up_engines:
+            focal = _choose_catch_up_engine(catch_up_engines, deficits, engine_counts)
+            opponents = [engine for engine in engines if engine.name != focal.name]
+            pairs = [(focal, opponent) for opponent in opponents] + [(opponent, focal) for opponent in opponents]
+            random.shuffle(pairs)
+            pairs.sort(
+                key=lambda pair: (
+                    _unordered_pair_count(counts, pair[0].name, pair[1].name),
+                    counts.get((pair[0].name, pair[1].name), 0),
+                    engine_counts.get(pair[0].name if pair[1].name == focal.name else pair[1].name, 0),
+                )
+            )
+            return pairs[0]
+
         pairs = list(permutations(sorted(engines, key=lambda engine: engine.engine_id), 2))
-        pairs.sort(key=lambda pair: (counts.get((pair[0].engine_id, pair[1].engine_id), 0), pair[0].engine_id, pair[1].engine_id))
+        random.shuffle(pairs)
+        pairs.sort(
+            key=lambda pair: (
+                _unordered_pair_count(counts, pair[0].name, pair[1].name),
+                counts.get((pair[0].name, pair[1].name), 0),
+                max(engine_counts.get(pair[0].name, 0), engine_counts.get(pair[1].name, 0)),
+            )
+        )
         return pairs[0]
 
     def _choose_opening(self, store: CompetitionStore, openings: OpeningBook, white, black):
@@ -97,3 +128,15 @@ class CompetitionRunner:
         supports, reason = probe_opening_support(engine, self.config.handshake_timeout_seconds)
         store.set_opening_capability(engine.engine_id, supports, reason)
         return supports, reason
+
+
+def _choose_catch_up_engine(engines, deficits: dict[str, int], engine_counts: dict[str, int]):
+    max_deficit = max(deficits[engine.name] for engine in engines)
+    candidates = [engine for engine in engines if deficits[engine.name] == max_deficit]
+    min_games = min(engine_counts.get(engine.name, 0) for engine in candidates)
+    candidates = [engine for engine in candidates if engine_counts.get(engine.name, 0) == min_games]
+    return random.choice(candidates)
+
+
+def _unordered_pair_count(counts: dict[tuple[str, str], int], first: str, second: str) -> int:
+    return counts.get((first, second), 0) + counts.get((second, first), 0)

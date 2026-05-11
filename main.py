@@ -48,6 +48,21 @@ def build_parser() -> argparse.ArgumentParser:
     compete.add_argument("--poll-seconds", type=float, default=5.0)
     compete.add_argument("--handshake-timeout-seconds", type=float, default=5.0)
     compete.add_argument("--move-timeout-seconds", type=float, default=10.0)
+
+    leaderboard = subparsers.add_parser("leaderboard", help="Open the ELO leaderboard TUI and save leaderboard files.")
+    leaderboard.add_argument("--results-db", type=Path, default=Path("results/competition.sqlite3"))
+    leaderboard.add_argument("--output-dir", type=Path, default=Path("results"))
+    leaderboard.add_argument(
+        "--anchor",
+        action="append",
+        default=[],
+        help="Known model ELO as name=elo, provider_model=elo, run_id=elo, or engine_id=elo. Repeatable.",
+    )
+    leaderboard.add_argument("--no-tui", action="store_true", help="Write leaderboard files without opening the TUI.")
+
+    migrate = subparsers.add_parser("migrate-results", help="Migrate legacy failed games into explicit forfeit/ignored results.")
+    migrate.add_argument("--results-db", type=Path, default=Path("results/competition.sqlite3"))
+    migrate.add_argument("--no-backup", action="store_true", help="Do not write a timestamped SQLite backup before migrating.")
     return parser
 
 
@@ -102,6 +117,20 @@ def main() -> int:
             move_timeout_seconds=args.move_timeout_seconds,
         ).run(max_games=args.max_games, forever=forever)
         print(f"played {played} game(s)")
+        return 0
+    if args.command == "leaderboard":
+        from leaderboard_tui import run as run_leaderboard
+
+        return run_leaderboard(args)
+    if args.command == "migrate-results":
+        from competition.results_migration import migrate_results_db
+
+        summary = migrate_results_db(args.results_db, create_backup=not args.no_backup)
+        if summary.backup_path is not None:
+            print(f"backup: {summary.backup_path}")
+        print(f"fixed failed games: {summary.fixed_failed_games}")
+        print(f"ignored failed games: {summary.ignored_failed_games}")
+        print(f"annotated finished games: {summary.annotated_finished_games}")
         return 0
     raise ValueError(f"unknown command: {args.command}")
 
