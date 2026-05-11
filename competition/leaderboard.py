@@ -8,8 +8,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable
 
-from competition.results_migration import inferred_failed_engine_sql
-
 
 DEFAULT_RATING = 1500.0
 ELO_SCALE = 400.0 / math.log(10)
@@ -96,7 +94,10 @@ def load_competition_data(db_path: Path) -> tuple[dict[str, EngineRecord], list[
                 games.status,
                 games.result,
                 games.reason,
-                {inferred_failed_engine_sql()} AS failed_engine_id
+                COALESCE(
+                    (SELECT engine_id FROM game_errors WHERE game_errors.game_id = games.game_id AND engine_id IS NOT NULL ORDER BY id DESC LIMIT 1),
+                    games.forfeiting_engine_id
+                ) AS failed_engine_id
             FROM games
             WHERE (status='finished' AND result IN ('1-0', '0-1', '1/2-1/2'))
                OR status='failed'
