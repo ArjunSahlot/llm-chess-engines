@@ -37,7 +37,7 @@ export default function HomePage() {
                 </Link>
               </div>
               <div className="hero-stats llm-stats">
-                <Metric icon={<Code2 />} label="Generated engines" value={formatInteger(summary.generated_engines)} />
+                <Metric icon={<Code2 />} label="Engines" value={formatInteger(summary.generated_engines)} />
                 <Metric icon={<Swords />} label="Finished games" value={formatInteger(summary.finished_games)} />
                 <Metric icon={<BrainCircuit />} label="Ply count" value={formatInteger(summary.moves)} />
               </div>
