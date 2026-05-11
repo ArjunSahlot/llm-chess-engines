@@ -18,7 +18,7 @@ DEFAULT_LEADERBOARD = ROOT / "results" / "elo_leaderboard.json"
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Sync ChessBench SQLite results to Supabase.")
+    parser = argparse.ArgumentParser(description="Force-push local ChessBench SQLite results to Supabase.")
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument("--leaderboard", type=Path, default=DEFAULT_LEADERBOARD)
     parser.add_argument("--batch-size", type=int, default=int(os.getenv("CHESSBENCH_BATCH_SIZE", "500")))
@@ -37,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     db.row_factory = sqlite3.Row
     client = SupabaseRestClient(supabase_url, service_key, args.dry_run)
     try:
+        reset_remote_tables(client)
         raw_to_canonical = sync_engines(db, client, args.batch_size)
         sync_games(db, client, raw_to_canonical, args.batch_size)
         sync_moves(db, client, raw_to_canonical, args.batch_size)
@@ -83,6 +84,42 @@ class SupabaseRestClient:
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
             raise SystemExit(f"Supabase upsert failed for {table}: {exc.code} {body}") from exc
+
+    def delete_all(self, table: str, required_column: str) -> None:
+        if self.dry_run:
+            print(f"[dry-run] delete all rows from {table}")
+            return
+        query = urllib.parse.urlencode({required_column: "not.is.null"})
+        url = f"{self.base_url}/rest/v1/{table}?{query}"
+        request = urllib.request.Request(
+            url,
+            method="DELETE",
+            headers={
+                "apikey": self.service_key,
+                "Authorization": f"Bearer {self.service_key}",
+                "Prefer": "return=minimal",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                response.read()
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise SystemExit(f"Supabase delete failed for {table}: {exc.code} {body}") from exc
+
+
+def reset_remote_tables(client: SupabaseRestClient) -> None:
+    for table, required_column in (
+        ("chessbench_uci_events", "id"),
+        ("chessbench_game_errors", "id"),
+        ("chessbench_moves", "game_id"),
+        ("chessbench_engine_capabilities", "raw_engine_id"),
+        ("chessbench_games", "game_id"),
+        ("chessbench_leaderboard_entries", "snapshot_id"),
+        ("chessbench_leaderboard_snapshots", "snapshot_id"),
+        ("chessbench_engines", "raw_engine_id"),
+    ):
+        client.delete_all(table, required_column)
 
 
 def sync_engines(db: sqlite3.Connection, client: SupabaseRestClient, batch_size: int) -> dict[str, str]:

@@ -63,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     leaderboard.add_argument("--no-tui", action="store_true", help="Write leaderboard files without opening the TUI.")
 
-    sync_supabase = subparsers.add_parser("sync-supabase", help="Sync local SQLite competition results to Supabase.")
+    sync_supabase = subparsers.add_parser("sync-supabase", help="Force-push local SQLite competition results to Supabase.")
     sync_supabase.add_argument("--db", type=Path, default=Path("results/competition.sqlite3"))
     sync_supabase.add_argument("--leaderboard", type=Path, default=Path("results/elo_leaderboard.json"))
     sync_supabase.add_argument("--batch-size", type=int, default=500)

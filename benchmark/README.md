@@ -43,13 +43,17 @@ uv run llm-chess export-landing-snapshot
 ## Supabase sync
 
 1. Run `supabase/schema.sql` in your Supabase project.
-2. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-3. Sync local results:
+2. Set `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+3. Force-push local results:
 
 ```bash
 uv run llm-chess sync-supabase --dry-run
 uv run llm-chess sync-supabase
 ```
+
+The sync command treats local files as the source of truth. It clears the
+ChessBench Supabase tables first, then uploads the local SQLite games, moves,
+engine metadata, errors, capabilities, and ELO snapshot.
 
 The public game archive reads from Supabase when `NEXT_PUBLIC_SUPABASE_URL` and
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` are present at build time. Without those values,
